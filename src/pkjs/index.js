@@ -458,64 +458,13 @@ function saveSettings() {
   localStorage.setItem('settings', JSON.stringify(settings));
 }
 
-// Config page embedded as data URI to avoid cross-origin issues with CloudPebble
-function buildConfigUrl() {
-  var zip = settings.zipCode || '08226';
-  var station = settings.stationId || '';
-  var mode = settings.displayMode || 1;
-
-  // Inline HTML config page
-  var html = '<!DOCTYPE html><html><head>' +
-    '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-    '<title>Pixel Tides</title><style>' +
-    '*{box-sizing:border-box;margin:0;padding:0}' +
-    'body{font-family:-apple-system,sans-serif;background:#1a1a2e;color:#eee;min-height:100vh;padding:20px}' +
-    '.hdr{text-align:center;padding:20px 0}.hdr h1{font-size:24px;color:#4fc3f7}' +
-    '.hdr p{color:#888;font-size:14px;margin-top:4px}' +
-    '.card{background:#16213e;border-radius:12px;padding:20px;margin:16px 0}' +
-    '.card h2{font-size:16px;color:#4fc3f7;margin-bottom:12px}' +
-    'label{display:block;font-size:14px;color:#aaa;margin-bottom:6px}' +
-    'input[type=text]{width:100%;padding:12px;font-size:16px;background:#0f3460;border:1px solid #4fc3f7;border-radius:8px;color:#fff;margin-bottom:12px}' +
-    '.hint{font-size:12px;color:#666;margin-top:-8px;margin-bottom:12px}' +
-    '.btn{display:block;width:100%;padding:14px;font-size:16px;font-weight:bold;border:none;border-radius:8px;cursor:pointer;margin-top:20px}' +
-    '.btn-s{background:#4fc3f7;color:#1a1a2e}.btn-c{background:#333;color:#aaa;margin-top:10px}' +
-    '.tg{display:flex;border-radius:8px;overflow:hidden;border:1px solid #4fc3f7;margin-bottom:12px}' +
-    '.tg label{flex:1;text-align:center;padding:12px;font-size:14px;font-weight:bold;color:#aaa;background:#0f3460;cursor:pointer;margin-bottom:0}' +
-    '.tg input[type=radio]{display:none}.tg input[type=radio]:checked+label{background:#4fc3f7;color:#1a1a2e}' +
-    '</style></head><body>' +
-    '<div class="hdr"><div style="font-size:32px">&#x1F30A;</div><h1>Pixel Tides</h1><p>Configure your tide location</p></div>' +
-    '<div class="card"><h2>Location</h2><label for="z">ZIP Code</label>' +
-    '<input type="text" id="z" placeholder="e.g. 08226" maxlength="10" value="' + zip + '">' +
-    '<p class="hint">US ZIP code for nearest NOAA tide station</p></div>' +
-    '<div class="card"><h2>Detail Level</h2><div class="tg">' +
-    '<input type="radio" name="m" id="m0" value="0"' + (mode==0?' checked':'') + '><label for="m0">Low</label>' +
-    '<input type="radio" name="m" id="m1" value="1"' + (mode==1?' checked':'') + '><label for="m1">Med</label>' +
-    '<input type="radio" name="m" id="m2" value="2"' + (mode==2?' checked':'') + '><label for="m2">High</label>' +
-    '</div><p class="hint">Low: time + weather. Med: + tide info. High: + sunrise/sunset, town, battery %.</p></div>' +
-    '<div class="card"><h2>Advanced (Optional)</h2><label for="s">NOAA Station ID</label>' +
-    '<input type="text" id="s" placeholder="e.g. 8534720" value="' + station + '">' +
-    '<p class="hint">Override auto-detection</p></div>' +
-    '<button class="btn btn-s" id="sv">Save Settings</button>' +
-    '<button class="btn btn-c" id="cn">Cancel</button>' +
-    '<script>' +
-    'document.getElementById("sv").addEventListener("click",function(){' +
-    'var md=document.querySelector("input[name=m]:checked");' +
-    'var r={zipCode:document.getElementById("z").value.trim()||"08226",' +
-    'stationId:document.getElementById("s").value.trim(),' +
-    'displayMode:md?md.value:"1"};' +
-    'document.location="pebblejs://close#"+encodeURIComponent(JSON.stringify(r));' +
-    '});' +
-    'document.getElementById("cn").addEventListener("click",function(){' +
-    'document.location="pebblejs://close";' +
-    '});' +
-    '</script></body></html>';
-
-  return 'data:text/html,' + encodeURIComponent(html);
-}
-
+// Config page hosted on GitHub Pages
 Pebble.addEventListener('showConfiguration', function () {
-  var url = buildConfigUrl();
-  console.log('Opening inline config page');
+  var url = 'https://hobbykitjr.github.io/Pebble-tides/config/index.html' +
+    '?zip=' + encodeURIComponent(settings.zipCode) +
+    '&station=' + encodeURIComponent(settings.stationId || '') +
+    '&mode=' + settings.displayMode;
+  console.log('Opening config: ' + url);
   Pebble.openURL(url);
 });
 
