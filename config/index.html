@@ -168,15 +168,27 @@
       document.getElementById('modeLow').checked = true;
     }
 
+    // CloudPebble appends return_to param; real phone uses pebblejs://close
+    var returnTo = getParam('return_to');
+    console.log('return_to: ' + (returnTo || '(none, using pebblejs://)'));
+
     function returnResult(jsonString) {
-      // Standard Pebble config return — works on real phone AND CloudPebble
-      var url = 'pebblejs://close#' + encodeURIComponent(jsonString);
       console.log('Config returning: ' + jsonString);
-      document.location = url;
+      if (returnTo) {
+        // CloudPebble: redirect back to emulator with data in hash
+        document.location = returnTo + '#' + encodeURIComponent(jsonString);
+      } else {
+        // Real Pebble phone
+        document.location = 'pebblejs://close#' + encodeURIComponent(jsonString);
+      }
     }
 
     function returnCancel() {
-      document.location = 'pebblejs://close';
+      if (returnTo) {
+        document.location = returnTo;
+      } else {
+        document.location = 'pebblejs://close';
+      }
     }
 
     // Save button
