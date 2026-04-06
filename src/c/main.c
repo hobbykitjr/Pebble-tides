@@ -524,29 +524,85 @@ static void draw_sand(GContext *ctx, GRect b) {
 }
 
 // ============================================================================
-// DRAW: BATTERY SHELLS
+// DRAW: BATTERY UMBRELLA
 // ============================================================================
-static void draw_shells(GContext *ctx, GRect b) {
-  // Fixed position left side, above tide text area
-  int shy=b.size.h-48;
-  int num=(s_bat+19)/20;
-  int bx=45;  // Inset for round bezel
+static void draw_battery(GContext *ctx, GRect b) {
+  // Beach umbrella with pie-chart canopy showing battery level
+  // Fixed position: left side, above tide text
+  int cx=55;             // Center X of canopy (inset for round bezel)
+  int pole_bot=b.size.h-38;  // Pole bottom
+  int pole_top=pole_bot-22;   // Pole top
+  int canopy_r=14;        // Canopy radius
+
+  // Pole
   #ifdef PBL_COLOR
-  graphics_context_set_fill_color(ctx,C_SHELL);
+  graphics_context_set_fill_color(ctx,C_SIGN_P);  // Brown
   #else
-  graphics_context_set_fill_color(ctx,GColorWhite);
+  graphics_context_set_fill_color(ctx,GColorDarkGray);
   #endif
-  for(int i=0;i<num&&i<5;i++){
-    int sx=bx+i*10;
-    graphics_fill_circle(ctx,GPoint(sx,shy+3),3);
-    graphics_fill_rect(ctx,GRect(sx-2,shy+3,5,3),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(cx-1,pole_top,3,pole_bot-pole_top),0,GCornerNone);
+
+  // Pole tip (small ball on top)
+  graphics_fill_circle(ctx,GPoint(cx,pole_top-1),2);
+
+  // Canopy background (empty/dark portion)
+  #ifdef PBL_COLOR
+  graphics_context_set_fill_color(ctx,GColorDarkGray);
+  #else
+  graphics_context_set_fill_color(ctx,GColorLightGray);
+  #endif
+  // Upper semicircle: from 180° to 360° in Pebble angles
+  GRect canopy_rect=GRect(cx-canopy_r, pole_top-canopy_r-2,
+                           canopy_r*2, canopy_r*2);
+  graphics_fill_radial(ctx,canopy_rect,GOvalScaleModeFitCircle,0,
+    DEG_TO_TRIGANGLE(180),DEG_TO_TRIGANGLE(360));
+
+  // Canopy filled portion (battery level)
+  // Fill from left (180°) proportional to battery
+  // 100% = full semicircle, 0% = empty
+  if(s_bat>0){
+    #ifdef PBL_COLOR
+    GColor bat_color;
+    if(s_bat<=20) bat_color=GColorRed;
+    else if(s_bat<=40) bat_color=GColorOrange;
+    else if(s_bat<=60) bat_color=GColorChromeYellow;
+    else bat_color=GColorGreen;
+    graphics_context_set_fill_color(ctx,bat_color);
+    #else
+    graphics_context_set_fill_color(ctx,GColorWhite);
+    #endif
+    // Scale: 180° to (180 + bat*180/100)°
+    int end_angle=180+(s_bat*180)/100;
+    graphics_fill_radial(ctx,canopy_rect,GOvalScaleModeFitCircle,0,
+      DEG_TO_TRIGANGLE(180),DEG_TO_TRIGANGLE(end_angle));
   }
+
+  // Canopy outline
+  #ifdef PBL_COLOR
+  graphics_context_set_stroke_color(ctx,GColorWhite);
+  #else
+  graphics_context_set_stroke_color(ctx,GColorBlack);
+  #endif
+  graphics_context_set_stroke_width(ctx,1);
+  graphics_draw_arc(ctx,canopy_rect,GOvalScaleModeFitCircle,
+    DEG_TO_TRIGANGLE(180),DEG_TO_TRIGANGLE(360));
+
+  // Stripe lines on canopy for umbrella look (3 lines)
+  for(int i=1;i<=3;i++){
+    int angle=180+i*45;  // Lines at 225°, 270°, 315°
+    int32_t a=DEG_TO_TRIGANGLE(angle);
+    int lx=cx+(sin_lookup(a)*canopy_r)/TRIG_MAX_RATIO;
+    int ly=(pole_top-canopy_r-2+canopy_r)-(cos_lookup(a)*canopy_r)/TRIG_MAX_RATIO;
+    graphics_draw_line(ctx,GPoint(cx,pole_top-2),GPoint(lx,ly));
+  }
+
+  // HIGH detail: percentage text below
   if(s_det==DETAIL_HIGH){
     char bb[6]; snprintf(bb,sizeof(bb),"%d%%",s_bat);
     GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
     graphics_context_set_text_color(ctx,C_INFO);
-    graphics_draw_text(ctx,bb,f,GRect(bx,shy+8,50,16),
-      GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+    graphics_draw_text(ctx,bb,f,GRect(cx-20,pole_bot,40,16),
+      GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 }
 
@@ -735,7 +791,7 @@ static void canvas_proc(Layer *l, GContext *ctx) {
   draw_sky(ctx,b); draw_sun(ctx,b); draw_moon(ctx,b);
   draw_ocean(ctx,b);
   draw_waves(ctx,b);
-  draw_sand(ctx,b); draw_shells(ctx,b); draw_bt(ctx,b);
+  draw_sand(ctx,b); draw_battery(ctx,b); draw_bt(ctx,b);
   draw_plane(ctx,b); draw_hud(ctx,b);
 }
 
