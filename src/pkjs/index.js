@@ -401,7 +401,8 @@ function fetchAllData() {
         'PREV_TIDE_MIN': tideResult ? tideResult.prevTideTime.min : 0,
         'DISPLAY_MODE': settings.displayMode,
         'TEMPERATURE': wxData ? wxData.temperature : 0,
-        'WEATHER_CODE': wxData ? wxData.weatherCode : 0
+        'WEATHER_CODE': wxData ? wxData.weatherCode : 0,
+        'TOWN_NAME': placeName || ''
       };
 
       Pebble.sendAppMessage(message,

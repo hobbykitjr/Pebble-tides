@@ -160,14 +160,16 @@
   </div>
 
   <div class="card">
-    <h2>Display Mode</h2>
+    <h2>Detail Level</h2>
     <div class="toggle-group">
-      <input type="radio" name="displayMode" id="modeMinimal" value="0">
-      <label for="modeMinimal">Minimal</label>
-      <input type="radio" name="displayMode" id="modeDetailed" value="1">
-      <label for="modeDetailed">Detailed</label>
+      <input type="radio" name="displayMode" id="modeLow" value="0">
+      <label for="modeLow">Low</label>
+      <input type="radio" name="displayMode" id="modeMed" value="1">
+      <label for="modeMed">Med</label>
+      <input type="radio" name="displayMode" id="modeHigh" value="2">
+      <label for="modeHigh">High</label>
     </div>
-    <p class="hint">Minimal: tide direction only. Detailed: tide times + sunrise/sunset times.</p>
+    <p class="hint">Low: time + weather only. Med: + tide info. High: + sunrise/sunset, town, battery %.</p>
   </div>
 
   <div class="card">
@@ -242,11 +244,13 @@
     stationField.value = getParam('station') || '';
 
     // Set display mode toggle
-    var currentMode = getParam('mode') || '0';
-    if (currentMode === '1') {
-      document.getElementById('modeDetailed').checked = true;
+    var currentMode = getParam('mode') || '1';
+    if (currentMode === '2') {
+      document.getElementById('modeHigh').checked = true;
+    } else if (currentMode === '1') {
+      document.getElementById('modeMed').checked = true;
     } else {
-      document.getElementById('modeMinimal').checked = true;
+      document.getElementById('modeLow').checked = true;
     }
 
     // Detect return method: CloudPebble uses return_to param, real phone uses pebblejs://close
