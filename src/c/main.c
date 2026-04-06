@@ -261,20 +261,24 @@ static void draw_sky(GContext *ctx, GRect b) {
     int twi=twi_pct();
     #ifdef PBL_COLOR
     if(twi>20) {
-      // Dawn/dusk: rich gradient inspired by sunset art
-      // dark purple top → purple → magenta → orange → gold at horizon
-      int bands=5;
-      int bh=sy/bands; if(bh<1) bh=1;
-      graphics_context_set_fill_color(ctx,GColorOxfordBlue);
-      graphics_fill_rect(ctx,GRect(0,0,b.size.w,bh),0,GCornerNone);
-      graphics_context_set_fill_color(ctx,GColorImperialPurple);
-      graphics_fill_rect(ctx,GRect(0,bh,b.size.w,bh),0,GCornerNone);
-      graphics_context_set_fill_color(ctx,GColorMagenta);
-      graphics_fill_rect(ctx,GRect(0,bh*2,b.size.w,bh),0,GCornerNone);
-      graphics_context_set_fill_color(ctx,C_SKY_DUSK);  // Orange
-      graphics_fill_rect(ctx,GRect(0,bh*3,b.size.w,bh),0,GCornerNone);
-      graphics_context_set_fill_color(ctx,GColorRajah);  // Warm gold
-      graphics_fill_rect(ctx,GRect(0,bh*4,b.size.w,sy-bh*4),0,GCornerNone);
+      // Dawn/dusk: rich gradient matching sunset reference art
+      GColor sky_bands[] = {
+        GColorOxfordBlue,       // Dark navy
+        GColorImperialPurple,   // Deep purple
+        GColorPurple,           // Purple
+        GColorMagenta,          // Vivid pink
+        GColorSunsetOrange,     // Pink-orange
+        C_SKY_DUSK,             // Orange
+        GColorRajah,            // Warm gold at horizon
+      };
+      int n=7;
+      int bh=sy/n; if(bh<1) bh=1;
+      for(int i=0;i<n;i++){
+        graphics_context_set_fill_color(ctx,sky_bands[i]);
+        int y0=bh*i;
+        int h1=(i==n-1)?sy-bh*i:bh;
+        graphics_fill_rect(ctx,GRect(0,y0,b.size.w,h1),0,GCornerNone);
+      }
     } else {
       // Normal day: solid blue sky
       graphics_context_set_fill_color(ctx,C_SKY);
@@ -401,18 +405,26 @@ static void draw_ocean(GContext *ctx, GRect b) {
   if(sy<=tb) return;
   int oh=sy-tb;
 
-  // Gentle gradient: cobalt → blue → vivid cerulean → tiffany near shore
+  // Smooth 6-band ocean gradient: deep → shore
   #ifdef PBL_COLOR
-  int b3=oh/3; if(b3<1) b3=1;
-  graphics_context_set_fill_color(ctx,C_OCEAN);      // Cobalt blue
-  graphics_fill_rect(ctx,GRect(0,tb,b.size.w,b3),0,GCornerNone);
-  graphics_context_set_fill_color(ctx,GColorBlue);
-  graphics_fill_rect(ctx,GRect(0,tb+b3,b.size.w,b3),0,GCornerNone);
-  graphics_context_set_fill_color(ctx,GColorVividCerulean);
-  graphics_fill_rect(ctx,GRect(0,tb+b3*2,b.size.w,b3),0,GCornerNone);
-  // Teal strip near shore
-  graphics_context_set_fill_color(ctx,GColorTiffanyBlue);
-  graphics_fill_rect(ctx,GRect(0,tb+b3*3,b.size.w,oh-b3*3),0,GCornerNone);
+  {
+    GColor bands[] = {
+      GColorDukeBlue,      // Deep blue
+      C_OCEAN,             // Cobalt
+      GColorBlue,          // Medium blue
+      GColorVividCerulean, // Lighter blue
+      GColorPictonBlue,    // Light blue
+      GColorTiffanyBlue    // Teal at shore
+    };
+    int n=6;
+    int bh=oh/n; if(bh<1) bh=1;
+    for(int i=0;i<n;i++){
+      graphics_context_set_fill_color(ctx,bands[i]);
+      int y0=tb+bh*i;
+      int h1=(i==n-1)?oh-bh*i:bh;
+      graphics_fill_rect(ctx,GRect(0,y0,b.size.w,h1),0,GCornerNone);
+    }
+  }
   #else
   graphics_context_set_fill_color(ctx,GColorBlack);
   graphics_fill_rect(ctx,GRect(0,tb,b.size.w,oh),0,GCornerNone);
@@ -579,8 +591,8 @@ static void draw_plane(GContext *ctx, GRect b) {
   if(bx<2) bx=2;
   int bw=px-bx-4;
 
-  // Banner hangs below plane
-  int by=py+8;  // Banner a few px below plane Y
+  // Banner attached just below plane
+  int by=py+5;  // Plane is 5px tall, banner starts right at bottom
   if(bw>10) {
     #ifdef PBL_COLOR
     graphics_context_set_fill_color(ctx,GColorRed);
