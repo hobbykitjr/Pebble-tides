@@ -316,6 +316,52 @@ function fetchSunriseSunset(lat, lng, callback) {
 }
 
 // ============================================================================
+// WEATHER API (Open-Meteo, free, no key)
+// ============================================================================
+function wmoToSimpleCode(wmo) {
+  // Map WMO weather codes to our simplified icons
+  if (wmo === 0) return 0;          // Clear
+  if (wmo <= 2) return 1;           // Cloudy (few/scattered)
+  if (wmo === 3) return 2;          // Overcast
+  if (wmo <= 48) return 3;          // Fog
+  if (wmo <= 65) return 4;          // Rain (drizzle, rain)
+  if (wmo <= 67) return 4;          // Freezing rain
+  if (wmo <= 77) return 6;          // Snow
+  if (wmo <= 82) return 4;          // Showers
+  if (wmo <= 86) return 6;          // Snow showers
+  if (wmo >= 95) return 5;          // Thunderstorm
+  return 1;                          // Default: cloudy
+}
+
+function fetchWeather(lat, lng, callback) {
+  var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat +
+            '&longitude=' + lng +
+            '&current=temperature_2m,weather_code,wind_speed_10m' +
+            '&temperature_unit=fahrenheit' +
+            '&wind_speed_unit=mph';
+
+  xhrRequest(url, 'GET', function (responseText) {
+    try {
+      var json = JSON.parse(responseText);
+      var temp = Math.round(json.current.temperature_2m);
+      var wxCode = wmoToSimpleCode(json.current.weather_code);
+      var wind = json.current.wind_speed_10m;
+
+      // Override to "windy" if wind > 20mph and not raining/storming
+      if (wind > 20 && wxCode < 4) wxCode = 7;
+
+      console.log('Weather: ' + temp + 'F, code=' + wxCode + ', wind=' + wind + 'mph');
+      callback({ temperature: temp, weatherCode: wxCode });
+    } catch (e) {
+      console.log('Weather parse error: ' + e);
+      callback({ temperature: 0, weatherCode: 0 });
+    }
+  }, function () {
+    callback({ temperature: 0, weatherCode: 0 });
+  });
+}
+
+// ============================================================================
 // MAIN DATA FETCH ORCHESTRATOR
 // ============================================================================
 function fetchAllData() {
@@ -324,39 +370,59 @@ function fetchAllData() {
   geocodeZip(settings.zipCode, function (lat, lng, placeName) {
     console.log('Geocoded to: ' + lat + ', ' + lng + ' (' + placeName + ')');
 
-    // Fetch sunrise/sunset
-    fetchSunriseSunset(lat, lng, function (sunData) {
-      console.log('Sunrise: ' + sunData.sunriseHour + ':' + sunData.sunriseMin);
-      console.log('Sunset: ' + sunData.sunsetHour + ':' + sunData.sunsetMin);
+    // Fetch all three data sources in parallel
+    var sunData = null, tideResult = null, wxData = null;
+    var pending = 3;
 
-      // Fetch tide data
-      findNearestStation(lat, lng, function (stationId) {
-        fetchTideData(stationId, function (predictions) {
-          var tideResult = processTideData(predictions);
-          console.log('Tide height: ' + tideResult.tideHeightPct + '%, ' +
-                      (tideResult.tideState ? 'rising' : 'falling'));
+    function trySend() {
+      pending--;
+      if (pending > 0) return;
 
-          // Send everything to the watch
-          var message = {
-            'TIDE_HEIGHT': tideResult.tideHeightPct,
-            'TIDE_STATE': tideResult.tideState,
-            'SUNRISE_HOUR': sunData.sunriseHour,
-            'SUNRISE_MIN': sunData.sunriseMin,
-            'SUNSET_HOUR': sunData.sunsetHour,
-            'SUNSET_MIN': sunData.sunsetMin,
-            'NEXT_HIGH_HOUR': tideResult.nextHigh.hour,
-            'NEXT_HIGH_MIN': tideResult.nextHigh.min,
-            'NEXT_LOW_HOUR': tideResult.nextLow.hour,
-            'NEXT_LOW_MIN': tideResult.nextLow.min,
-            'DISPLAY_MODE': settings.displayMode
-          };
+      // All data ready, send to watch
+      var message = {
+        'TIDE_HEIGHT': tideResult ? tideResult.tideHeightPct : 50,
+        'TIDE_STATE': tideResult ? tideResult.tideState : 1,
+        'SUNRISE_HOUR': sunData ? sunData.sunriseHour : 6,
+        'SUNRISE_MIN': sunData ? sunData.sunriseMin : 0,
+        'SUNSET_HOUR': sunData ? sunData.sunsetHour : 19,
+        'SUNSET_MIN': sunData ? sunData.sunsetMin : 0,
+        'NEXT_HIGH_HOUR': tideResult ? tideResult.nextHigh.hour : 0,
+        'NEXT_HIGH_MIN': tideResult ? tideResult.nextHigh.min : 0,
+        'NEXT_LOW_HOUR': tideResult ? tideResult.nextLow.hour : 0,
+        'NEXT_LOW_MIN': tideResult ? tideResult.nextLow.min : 0,
+        'DISPLAY_MODE': settings.displayMode,
+        'TEMPERATURE': wxData ? wxData.temperature : 0,
+        'WEATHER_CODE': wxData ? wxData.weatherCode : 0
+      };
 
-          Pebble.sendAppMessage(message,
-            function () { console.log('Data sent to watch successfully'); },
-            function (e) { console.log('Error sending data to watch'); }
-          );
-        });
+      Pebble.sendAppMessage(message,
+        function () { console.log('All data sent to watch'); },
+        function (e) { console.log('Error sending data'); }
+      );
+    }
+
+    // 1. Sunrise/sunset
+    fetchSunriseSunset(lat, lng, function (data) {
+      sunData = data;
+      console.log('Sun: rise=' + data.sunriseHour + ':' + data.sunriseMin +
+                  ' set=' + data.sunsetHour + ':' + data.sunsetMin);
+      trySend();
+    });
+
+    // 2. Tides
+    findNearestStation(lat, lng, function (stationId) {
+      fetchTideData(stationId, function (predictions) {
+        tideResult = processTideData(predictions);
+        console.log('Tide: ' + tideResult.tideHeightPct + '% ' +
+                    (tideResult.tideState ? 'rising' : 'falling'));
+        trySend();
       });
+    });
+
+    // 3. Weather
+    fetchWeather(lat, lng, function (data) {
+      wxData = data;
+      trySend();
     });
   });
 }
