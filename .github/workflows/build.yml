@@ -1,0 +1,39 @@
+name: Build Pebble Watchface
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build with Pebble SDK
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/pebble/project" \
+            -w /pebble/project \
+            rebble/pebble-sdk:latest \
+            /bin/bash -c "pebble build"
+
+      - name: Upload PBW artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pebble-tides.pbw
+          path: build/*.pbw
+          if-no-files-found: error
+
+      - name: Create Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/*.pbw
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

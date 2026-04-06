@@ -1,0 +1,38 @@
+{
+  "name": "pebble-tides",
+  "author": "Hobbykitjr",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Pixel Tides",
+    "uuid": "c7e3f1a2-8b4d-4e6f-9a1c-3d5e7f2b8c4a",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["gabbro"],
+    "capabilities": ["location", "configurable"],
+    "messageKeys": {
+      "TIDE_HEIGHT": 0,
+      "TIDE_STATE": 1,
+      "SUNRISE_HOUR": 2,
+      "SUNRISE_MIN": 3,
+      "SUNSET_HOUR": 4,
+      "SUNSET_MIN": 5,
+      "NEXT_HIGH_HOUR": 6,
+      "NEXT_HIGH_MIN": 7,
+      "NEXT_LOW_HOUR": 8,
+      "NEXT_LOW_MIN": 9,
+      "REQUEST_DATA": 10,
+      "ZIP_CODE": 11,
+      "STATION_ID": 12,
+      "DISPLAY_MODE": 13
+    },
+    "watchapp": {
+      "watchface": true
+    },
+    "resources": {
+      "media": []
+    }
+  }
+}
