@@ -11,7 +11,7 @@
 
 // Default zip code (updated via Clay settings)
 var settings = {
-  zipCode: '08401',  // Atlantic City, NJ (default - has NOAA tide station)
+  zipCode: '08226',  // Ocean City, NJ (default - has nearby NOAA tide station)
   stationId: '',      // Optional NOAA station override
   displayMode: 0      // 0 = minimal, 1 = detailed
 };

@@ -164,6 +164,28 @@
       document.getElementById('modeMinimal').checked = true;
     }
 
+    // Detect return method: CloudPebble uses return_to param, real phone uses pebblejs://close
+    var returnTo = getParam('return_to');
+
+    function returnResult(jsonString) {
+      if (returnTo) {
+        // CloudPebble: redirect back with config data as hash
+        var url = returnTo + '#' + encodeURIComponent(jsonString);
+        window.location.href = url;
+      } else {
+        // Real Pebble phone app
+        window.location.href = 'pebblejs://close#' + encodeURIComponent(jsonString);
+      }
+    }
+
+    function returnCancel() {
+      if (returnTo) {
+        window.location.href = returnTo;
+      } else {
+        window.location.href = 'pebblejs://close';
+      }
+    }
+
     // Save button
     document.getElementById('saveBtn').addEventListener('click', function () {
       var selectedMode = document.querySelector('input[name="displayMode"]:checked');
@@ -173,14 +195,12 @@
         displayMode: selectedMode ? selectedMode.value : '0'
       };
 
-      // Return settings to Pebble app
-      var returnUrl = 'pebblejs://close#' + encodeURIComponent(JSON.stringify(result));
-      window.location.href = returnUrl;
+      returnResult(JSON.stringify(result));
     });
 
     // Cancel button
     document.getElementById('cancelBtn').addEventListener('click', function () {
-      window.location.href = 'pebblejs://close';
+      returnCancel();
     });
   </script>
 </body>
