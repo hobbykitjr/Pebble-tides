@@ -469,7 +469,8 @@ Pebble.addEventListener('showConfiguration', function () {
 });
 
 Pebble.addEventListener('webviewclosed', function (e) {
-  if (e && e.response) {
+  console.log('webviewclosed fired! response: ' + (e ? JSON.stringify(e.response) : 'null'));
+  if (e && e.response && e.response.length > 0) {
     try {
       var config = JSON.parse(decodeURIComponent(e.response));
       if (config.zipCode) settings.zipCode = config.zipCode;
