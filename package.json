@@ -28,7 +28,9 @@
       "STATION_ID": 12,
       "DISPLAY_MODE": 13,
       "TEMPERATURE": 14,
-      "WEATHER_CODE": 15
+      "WEATHER_CODE": 15,
+      "PREV_TIDE_HOUR": 16,
+      "PREV_TIDE_MIN": 17
     },
     "watchapp": {
       "watchface": true

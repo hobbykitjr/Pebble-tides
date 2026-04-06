@@ -48,6 +48,8 @@
 #define PERSIST_DISPLAY_MODE   11
 #define PERSIST_TEMPERATURE    12
 #define PERSIST_WEATHER_CODE   13
+#define PERSIST_PREV_TIDE_HOUR 14
+#define PERSIST_PREV_TIDE_MIN  15
 
 // Dev mode
 #define DEV_MODE 1
@@ -125,6 +127,7 @@ typedef struct {
   int tide_state;       // 0=falling, 1=rising
   int next_high_hour, next_high_min;
   int next_low_hour, next_low_min;
+  int prev_tide_hour, prev_tide_min;  // Time of most recent tide event
   int temperature;      // degrees F
   int weather_code;     // WX_* constant
   bool data_valid;
@@ -148,13 +151,15 @@ static TideData s_tide = {
   .tide_height_pct = 50, .tide_state = 1,
   .next_high_hour = 12, .next_high_min = 0,
   .next_low_hour = 18, .next_low_min = 0,
+  .prev_tide_hour = 6, .prev_tide_min = 0,
   .temperature = 72, .weather_code = WX_CLEAR,
   .data_valid = false
 };
 
 static char s_time_buffer[8];
 static char s_date_buffer[16];
-static char s_tide_info_buffer[48];
+static char s_tide_line1[40];
+static char s_tide_line2[40];
 static char s_sunrise_buffer[8];
 static char s_sunset_buffer[8];
 static char s_temp_buffer[8];
@@ -178,16 +183,18 @@ typedef struct {
   int sr_h, sr_m, ss_h, ss_m;
   int tide_pct, tide_state;
   int nh_h, nh_m, nl_h, nl_m;
+  int pt_h, pt_m;  // previous tide time
   int temp, wx;
 } TestPreset;
 
 static const TestPreset s_test_presets[NUM_TEST_PRESETS] = {
-  {  6, 15,  6, 0, 19, 45,  25, 1, 10, 30, 16, 45, 58, WX_FOG      },
-  {  9, 30,  6, 0, 19, 45,  95, 0,  9, 15, 15, 30, 72, WX_CLOUDY   },
-  { 12,  0,  6, 0, 19, 45,  50, 0, 18,  0, 15, 30, 85, WX_CLEAR    },
-  { 19, 30,  6, 0, 19, 45,  10, 1, 22,  0, 19, 15, 68, WX_WIND     },
-  { 22,  0,  6, 0, 19, 45,  60, 0,  4, 30, 22, 30, 55, WX_RAIN     },
-  {  2, 30,  6, 0, 19, 45,  30, 1,  4, 30,  0, 15, 48, WX_SNOW     },
+  //                                                     prev    temp wx
+  {  6, 15,  6, 0, 19, 45,  25, 1, 10, 30, 16, 45,  4, 0,  58, WX_FOG      }, // low was 4:00
+  {  9, 30,  6, 0, 19, 45,  95, 0,  9, 15, 15, 30,  9, 15, 72, WX_CLOUDY   }, // high was 9:15 (15m ago)
+  { 12,  0,  6, 0, 19, 45,  50, 0, 18,  0, 15, 30,  9, 30, 85, WX_CLEAR    }, // high was 9:30
+  { 19, 30,  6, 0, 19, 45,  10, 1, 22,  0, 19, 15, 19, 15, 68, WX_WIND     }, // low was 19:15 (15m ago)
+  { 22,  0,  6, 0, 19, 45,  60, 0,  4, 30, 22, 30, 21, 30, 55, WX_RAIN     }, // high was 21:30 (30m ago)
+  {  2, 30,  6, 0, 19, 45,  30, 1,  4, 30,  0, 15,  0, 15, 48, WX_SNOW     }, // low was 0:15
 };
 
 static void apply_test_preset(int idx) {
@@ -200,6 +207,7 @@ static void apply_test_preset(int idx) {
   s_tide.tide_state = p->tide_state;
   s_tide.next_high_hour = p->nh_h; s_tide.next_high_min = p->nh_m;
   s_tide.next_low_hour = p->nl_h; s_tide.next_low_min = p->nl_m;
+  s_tide.prev_tide_hour = p->pt_h; s_tide.prev_tide_min = p->pt_m;
   s_tide.temperature = p->temp; s_tide.weather_code = p->wx;
   s_tide.data_valid = true;
   snprintf(s_time_buffer, sizeof(s_time_buffer), "%d:%02d", p->hour, p->min);
@@ -602,36 +610,113 @@ static void draw_hud(GContext *ctx, GRect b) {
     GRect(b.size.w - 60, sun_y, 50, 18), GTextAlignmentRight);
 
   // -- TIDE INFO on sand --
+  // Logic:
+  //   tide_state 1 = rising: prev was high→low, next is high
+  //   tide_state 0 = falling: prev was low→high, next is low
+  //
+  // Top line: the most imminent/recent tide event
+  //   - If next event is within 60min: "High Tide in 45m"
+  //   - If prev event was within 60min: "High Tide 30m ago"
+  //   - Otherwise: "High Tide 4:26pm"  (next event with timestamp)
+  // Bottom line: always the opposite tide type with timestamp
+
   GFont tide_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
+
   if (s_tide.data_valid) {
-    // Format: "Hi 12:00  Lo 6:15"
-    // Show relative time for the next event when possible
-    snprintf(s_tide_info_buffer, sizeof(s_tide_info_buffer),
-             "Hi %d:%02d  Lo %d:%02d",
-             s_tide.next_high_hour, s_tide.next_high_min,
-             s_tide.next_low_hour, s_tide.next_low_min);
+    int now_mins = s_current_hour * 60 + s_current_min;
+
+    // Determine next and following tide
+    int next_h, next_m, follow_h, follow_m;
+    const char *next_label, *follow_label;
+
+    if (s_tide.tide_state == 1) {
+      // Rising → next is high, following is low
+      next_h = s_tide.next_high_hour; next_m = s_tide.next_high_min;
+      follow_h = s_tide.next_low_hour; follow_m = s_tide.next_low_min;
+      next_label = "High Tide";
+      follow_label = "Low Tide";
+    } else {
+      // Falling → next is low, following is high
+      next_h = s_tide.next_low_hour; next_m = s_tide.next_low_min;
+      follow_h = s_tide.next_high_hour; follow_m = s_tide.next_high_min;
+      next_label = "Low Tide";
+      follow_label = "High Tide";
+    }
+
+    int next_mins = next_h * 60 + next_m;
+    int prev_mins = s_tide.prev_tide_hour * 60 + s_tide.prev_tide_min;
+
+    // Handle day wrap (next tide might be tomorrow)
+    int mins_until_next = next_mins - now_mins;
+    if (mins_until_next < 0) mins_until_next += 24 * 60;
+
+    int mins_since_prev = now_mins - prev_mins;
+    if (mins_since_prev < 0) mins_since_prev += 24 * 60;
+
+    // Previous tide label (opposite of next)
+    const char *prev_label = (s_tide.tide_state == 1) ? "Low Tide" : "High Tide";
+
+    // -- TOP LINE --
+    if (mins_since_prev <= 60) {
+      // Recent event: "High Tide 30m ago"
+      if (mins_since_prev == 0) {
+        snprintf(s_tide_line1, sizeof(s_tide_line1), "%s now!", prev_label);
+      } else if (mins_since_prev < 60) {
+        snprintf(s_tide_line1, sizeof(s_tide_line1), "%s %dm ago", prev_label, mins_since_prev);
+      } else {
+        snprintf(s_tide_line1, sizeof(s_tide_line1), "%s 1hr ago", prev_label);
+      }
+      // Bottom line: next tide with timestamp
+      snprintf(s_tide_line2, sizeof(s_tide_line2), "%s %d:%02d",
+               next_label, next_h, next_m);
+    } else if (mins_until_next <= 60) {
+      // Approaching event: "High Tide in 45m"
+      if (mins_until_next < 60) {
+        snprintf(s_tide_line1, sizeof(s_tide_line1), "%s in %dm", next_label, mins_until_next);
+      } else {
+        snprintf(s_tide_line1, sizeof(s_tide_line1), "%s in 1hr", next_label);
+      }
+      // Bottom line: following tide with timestamp
+      snprintf(s_tide_line2, sizeof(s_tide_line2), "%s %d:%02d",
+               follow_label, follow_h, follow_m);
+    } else {
+      // More than 1hr from both: show next tide with timestamp
+      snprintf(s_tide_line1, sizeof(s_tide_line1), "%s %d:%02d",
+               next_label, next_h, next_m);
+      // Bottom line: following tide with timestamp
+      snprintf(s_tide_line2, sizeof(s_tide_line2), "%s %d:%02d",
+               follow_label, follow_h, follow_m);
+    }
   } else {
-    snprintf(s_tide_info_buffer, sizeof(s_tide_info_buffer), "Loading...");
+    snprintf(s_tide_line1, sizeof(s_tide_line1), "Loading...");
+    s_tide_line2[0] = '\0';
   }
 
   // Position in the sand area
-  int info_y = water_y + 8;
-  if (info_y + 18 > b.size.h) info_y = b.size.h - 20;
+  int info_y = water_y + 6;
+  if (info_y + 34 > b.size.h) info_y = b.size.h - 36;
 
+  // Draw line 1 (top)
   graphics_context_set_text_color(ctx, COLOR_TEXT_SHADOW);
-  graphics_draw_text(ctx, s_tide_info_buffer, tide_font,
+  graphics_draw_text(ctx, s_tide_line1, tide_font,
     GRect(1, info_y+1, b.size.w, 18),
     GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   graphics_context_set_text_color(ctx, COLOR_TEXT_INFO);
-  graphics_draw_text(ctx, s_tide_info_buffer, tide_font,
+  graphics_draw_text(ctx, s_tide_line1, tide_font,
     GRect(0, info_y, b.size.w, 18),
     GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-  // Tide direction arrow below
-  const char *tide_str = s_tide.tide_state ? "^ Rising" : "v Falling";
-  graphics_draw_text(ctx, tide_str, tide_font,
-    GRect(0, info_y + 14, b.size.w, 18),
-    GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  // Draw line 2 (bottom)
+  if (s_tide_line2[0] != '\0') {
+    graphics_context_set_text_color(ctx, COLOR_TEXT_SHADOW);
+    graphics_draw_text(ctx, s_tide_line2, tide_font,
+      GRect(1, info_y+15, b.size.w, 18),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    graphics_context_set_text_color(ctx, COLOR_TEXT_INFO);
+    graphics_draw_text(ctx, s_tide_line2, tide_font,
+      GRect(0, info_y+14, b.size.w, 18),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  }
 }
 
 // ============================================================================
@@ -773,6 +858,10 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   if (t) s_tide.next_low_hour = (int)t->value->int32;
   t = dict_find(iterator, MESSAGE_KEY_NEXT_LOW_MIN);
   if (t) s_tide.next_low_min = (int)t->value->int32;
+  t = dict_find(iterator, MESSAGE_KEY_PREV_TIDE_HOUR);
+  if (t) s_tide.prev_tide_hour = (int)t->value->int32;
+  t = dict_find(iterator, MESSAGE_KEY_PREV_TIDE_MIN);
+  if (t) s_tide.prev_tide_min = (int)t->value->int32;
   t = dict_find(iterator, MESSAGE_KEY_DISPLAY_MODE);
   if (t) s_display_mode = (int)t->value->int32;
   t = dict_find(iterator, MESSAGE_KEY_TEMPERATURE);
@@ -793,6 +882,8 @@ static void inbox_received_callback(DictionaryIterator *iterator, void *context)
   persist_write_int(PERSIST_NEXT_HIGH_MIN, s_tide.next_high_min);
   persist_write_int(PERSIST_NEXT_LOW_HOUR, s_tide.next_low_hour);
   persist_write_int(PERSIST_NEXT_LOW_MIN, s_tide.next_low_min);
+  persist_write_int(PERSIST_PREV_TIDE_HOUR, s_tide.prev_tide_hour);
+  persist_write_int(PERSIST_PREV_TIDE_MIN, s_tide.prev_tide_min);
   persist_write_int(PERSIST_TEMPERATURE, s_tide.temperature);
   persist_write_int(PERSIST_WEATHER_CODE, s_tide.weather_code);
   persist_write_bool(PERSIST_DATA_VALID, true);
@@ -821,6 +912,10 @@ static void load_persisted_data(void) {
     s_tide.next_high_min = persist_read_int(PERSIST_NEXT_HIGH_MIN);
     s_tide.next_low_hour = persist_read_int(PERSIST_NEXT_LOW_HOUR);
     s_tide.next_low_min = persist_read_int(PERSIST_NEXT_LOW_MIN);
+    if (persist_exists(PERSIST_PREV_TIDE_HOUR)) {
+      s_tide.prev_tide_hour = persist_read_int(PERSIST_PREV_TIDE_HOUR);
+      s_tide.prev_tide_min = persist_read_int(PERSIST_PREV_TIDE_MIN);
+    }
     s_tide.data_valid = true;
   }
   if (persist_exists(PERSIST_TEMPERATURE))
@@ -877,7 +972,7 @@ static void init(void) {
   app_message_register_inbox_dropped(inbox_dropped_callback);
   app_message_register_outbox_failed(outbox_failed_callback);
   app_message_register_outbox_sent(outbox_sent_callback);
-  app_message_open(512, 64);
+  app_message_open(1024, 64);
 }
 
 static void deinit(void) {

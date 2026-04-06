@@ -261,11 +261,18 @@ function processTideData(predictions) {
     }
   }
 
+  // Previous tide time (for "X ago" display)
+  var prevTideTime = { hour: 0, min: 0 };
+  if (prevTide) {
+    prevTideTime = { hour: prevTide.time.getHours(), min: prevTide.time.getMinutes() };
+  }
+
   return {
     tideHeightPct: tideHeightPct,
     tideState: tideState,
     nextHigh: nextHigh || { hour: 0, min: 0 },
-    nextLow: nextLow || { hour: 0, min: 0 }
+    nextLow: nextLow || { hour: 0, min: 0 },
+    prevTideTime: prevTideTime
   };
 }
 
@@ -390,6 +397,8 @@ function fetchAllData() {
         'NEXT_HIGH_MIN': tideResult ? tideResult.nextHigh.min : 0,
         'NEXT_LOW_HOUR': tideResult ? tideResult.nextLow.hour : 0,
         'NEXT_LOW_MIN': tideResult ? tideResult.nextLow.min : 0,
+        'PREV_TIDE_HOUR': tideResult ? tideResult.prevTideTime.hour : 0,
+        'PREV_TIDE_MIN': tideResult ? tideResult.prevTideTime.min : 0,
         'DISPLAY_MODE': settings.displayMode,
         'TEMPERATURE': wxData ? wxData.temperature : 0,
         'WEATHER_CODE': wxData ? wxData.weatherCode : 0
