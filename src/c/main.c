@@ -261,23 +261,33 @@ static void draw_sky(GContext *ctx, GRect b) {
     int twi=twi_pct();
     #ifdef PBL_COLOR
     if(twi>20) {
-      // Dawn/dusk: rich gradient matching sunset reference art
-      GColor sky_bands[] = {
-        GColorOxfordBlue,       // Dark navy
-        GColorImperialPurple,   // Deep purple
-        GColorPurple,           // Purple
-        GColorMagenta,          // Vivid pink
-        GColorSunsetOrange,     // Pink-orange
-        C_SKY_DUSK,             // Orange
-        GColorRajah,            // Warm gold at horizon
+      // Dawn/dusk: dithered gradient — alternate rows between colors for blending
+      GColor sky_cols[] = {
+        GColorOxfordBlue,       // 0: Dark navy
+        GColorImperialPurple,   // 1: Deep purple
+        GColorPurple,           // 2: Purple
+        GColorMagenta,          // 3: Vivid pink
+        GColorSunsetOrange,     // 4: Pink-orange
+        C_SKY_DUSK,             // 5: Orange
+        GColorRajah,            // 6: Warm gold
       };
       int n=7;
-      int bh=sy/n; if(bh<1) bh=1;
-      for(int i=0;i<n;i++){
-        graphics_context_set_fill_color(ctx,sky_bands[i]);
-        int y0=bh*i;
-        int h1=(i==n-1)?sy-bh*i:bh;
-        graphics_fill_rect(ctx,GRect(0,y0,b.size.w,h1),0,GCornerNone);
+      // Each color gets a zone; at zone boundaries, alternate rows for blending
+      for(int y=0;y<sy;y++){
+        // Map y to a float-like position in the color array
+        int pos=(y*n*10)/sy;  // 0 to n*10 (e.g. 0-70)
+        int idx=pos/10;       // Which color zone (0-6)
+        int frac=pos%10;      // Position within zone (0-9)
+        if(idx>=n-1) idx=n-2;
+        // Dither: use frac to decide which of two adjacent colors
+        GColor c;
+        if(frac<5 || (frac==5 && (y%2==0))) {
+          c=sky_cols[idx];
+        } else {
+          c=sky_cols[idx+1];
+        }
+        graphics_context_set_fill_color(ctx,c);
+        graphics_fill_rect(ctx,GRect(0,y,b.size.w,1),0,GCornerNone);
       }
     } else {
       // Normal day: solid blue sky
@@ -405,24 +415,27 @@ static void draw_ocean(GContext *ctx, GRect b) {
   if(sy<=tb) return;
   int oh=sy-tb;
 
-  // Smooth 6-band ocean gradient: deep → shore
+  // Dithered ocean gradient: deep → shore (blended, no hard lines)
   #ifdef PBL_COLOR
   {
-    GColor bands[] = {
-      GColorDukeBlue,      // Deep blue
+    GColor oc[] = {
       C_OCEAN,             // Cobalt
       GColorBlue,          // Medium blue
       GColorVividCerulean, // Lighter blue
       GColorPictonBlue,    // Light blue
       GColorTiffanyBlue    // Teal at shore
     };
-    int n=6;
-    int bh=oh/n; if(bh<1) bh=1;
-    for(int i=0;i<n;i++){
-      graphics_context_set_fill_color(ctx,bands[i]);
-      int y0=tb+bh*i;
-      int h1=(i==n-1)?oh-bh*i:bh;
-      graphics_fill_rect(ctx,GRect(0,y0,b.size.w,h1),0,GCornerNone);
+    int n=5;
+    for(int y=0;y<oh;y++){
+      int pos=(y*n*10)/oh;
+      int idx=pos/10;
+      int frac=pos%10;
+      if(idx>=n-1) idx=n-2;
+      GColor c;
+      if(frac<5||(frac==5&&(y%2==0))) c=oc[idx];
+      else c=oc[idx+1];
+      graphics_context_set_fill_color(ctx,c);
+      graphics_fill_rect(ctx,GRect(0,tb+y,b.size.w,1),0,GCornerNone);
     }
   }
   #else
@@ -591,9 +604,11 @@ static void draw_plane(GContext *ctx, GRect b) {
   if(bx<2) bx=2;
   int bw=px-bx-4;
 
-  // Banner attached just below plane
-  int by=py+5;  // Plane is 5px tall, banner starts right at bottom
+  // Banner and plane drawn together at same Y level
+  // Banner is the main element, plane overlaps its right edge
+  int by=py;  // Banner at same Y as plane reference
   if(bw>10) {
+    // Red banner
     #ifdef PBL_COLOR
     graphics_context_set_fill_color(ctx,GColorRed);
     #else
@@ -603,25 +618,22 @@ static void draw_plane(GContext *ctx, GRect b) {
     // Pennant tail
     graphics_fill_rect(ctx,GRect(bx-3,by+2,3,10),0,GCornerNone);
 
+    // Banner text
     GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
     graphics_context_set_text_color(ctx,C_TEXT);
     const char *msg=s_refreshing?"Updating...":"Updated!";
     graphics_draw_text(ctx,msg,f,GRect(bx+2,by-1,bw-4,16),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
-
-    // String from plane to banner
-    graphics_context_set_stroke_color(ctx,C_PLANE);
-    graphics_context_set_stroke_width(ctx,1);
-    graphics_draw_line(ctx,GPoint(px,py+5),GPoint(bx+bw-2,by));
   }
 
-  // Plane body (above banner)
+  // Plane body at same vertical center as banner
+  int plane_y=by+2;  // Centered in the 14px banner
   graphics_context_set_fill_color(ctx,C_PLANE);
-  graphics_fill_rect(ctx,GRect(px,py,14,5),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(px,plane_y,14,5),0,GCornerNone);
   // Wings
-  graphics_fill_rect(ctx,GRect(px+4,py-4,6,13),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(px+4,plane_y-4,6,13),0,GCornerNone);
   // Tail
-  graphics_fill_rect(ctx,GRect(px-3,py-3,5,4),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(px-3,plane_y-2,5,4),0,GCornerNone);
 
 }
 

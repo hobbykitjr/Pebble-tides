@@ -174,12 +174,15 @@
 
     function returnResult(jsonString) {
       console.log('Config returning: ' + jsonString);
+      var encoded = encodeURIComponent(jsonString);
       if (returnTo) {
-        // CloudPebble: redirect back to emulator with data in hash
-        document.location = returnTo + '#' + encodeURIComponent(jsonString);
+        // CloudPebble: try multiple return methods
+        // Method 1: hash fragment (standard)
+        // Method 2: also set as query param in case CloudPebble reads that
+        document.location = returnTo + 'response=' + encoded + '#' + encoded;
       } else {
         // Real Pebble phone
-        document.location = 'pebblejs://close#' + encodeURIComponent(jsonString);
+        document.location = 'pebblejs://close#' + encoded;
       }
     }
 
