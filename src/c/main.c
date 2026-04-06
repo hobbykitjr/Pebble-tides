@@ -170,6 +170,9 @@ static char s_sun_info_buffer[32];
 
 static int s_display_mode = DISPLAY_MODE_MINIMAL;
 
+static int s_current_hour = 12;
+static int s_current_min = 0;
+
 #if DEV_MODE
 static int s_test_preset = -1;  // -1 = live data, 0+ = test preset index
 static const char *s_preset_names[] = {
@@ -234,9 +237,6 @@ static void apply_test_preset(int index) {
   snprintf(s_date_buffer, sizeof(s_date_buffer), "DEV: %s", s_preset_names[index]);
 }
 #endif
-
-static int s_current_hour = 12;
-static int s_current_min = 0;
 
 // ============================================================================
 // UTILITY FUNCTIONS
