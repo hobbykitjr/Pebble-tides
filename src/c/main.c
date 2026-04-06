@@ -259,16 +259,30 @@ static void draw_sky(GContext *ctx, GRect b) {
     #endif
   } else {
     int twi=twi_pct();
-    GColor col = (twi>30) ? C_SKY_DAWN : C_SKY;
-    graphics_context_set_fill_color(ctx,col);
-    graphics_fill_rect(ctx,GRect(0,0,b.size.w,sy),0,GCornerNone);
-    // Warm band at horizon during dawn/dusk
     #ifdef PBL_COLOR
     if(twi>20) {
-      graphics_context_set_fill_color(ctx,C_SKY_DUSK);
-      int band_y=sy-20; if(band_y<0) band_y=0;
-      graphics_fill_rect(ctx,GRect(0,band_y,b.size.w,20),0,GCornerNone);
+      // Dawn/dusk: rich gradient inspired by sunset art
+      // dark purple top → purple → magenta → orange → gold at horizon
+      int bands=5;
+      int bh=sy/bands; if(bh<1) bh=1;
+      graphics_context_set_fill_color(ctx,GColorOxfordBlue);
+      graphics_fill_rect(ctx,GRect(0,0,b.size.w,bh),0,GCornerNone);
+      graphics_context_set_fill_color(ctx,GColorImperialPurple);
+      graphics_fill_rect(ctx,GRect(0,bh,b.size.w,bh),0,GCornerNone);
+      graphics_context_set_fill_color(ctx,GColorMagenta);
+      graphics_fill_rect(ctx,GRect(0,bh*2,b.size.w,bh),0,GCornerNone);
+      graphics_context_set_fill_color(ctx,C_SKY_DUSK);  // Orange
+      graphics_fill_rect(ctx,GRect(0,bh*3,b.size.w,bh),0,GCornerNone);
+      graphics_context_set_fill_color(ctx,GColorRajah);  // Warm gold
+      graphics_fill_rect(ctx,GRect(0,bh*4,b.size.w,sy-bh*4),0,GCornerNone);
+    } else {
+      // Normal day: solid blue sky
+      graphics_context_set_fill_color(ctx,C_SKY);
+      graphics_fill_rect(ctx,GRect(0,0,b.size.w,sy),0,GCornerNone);
     }
+    #else
+    graphics_context_set_fill_color(ctx,C_SKY);
+    graphics_fill_rect(ctx,GRect(0,0,b.size.w,sy),0,GCornerNone);
     #endif
   }
 }
