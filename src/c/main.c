@@ -692,7 +692,8 @@ static void anim_cb(void *data){
   s_timer=app_timer_register(WAVE_ANIM_INTERVAL,anim_cb,NULL);
 }
 static void start_anim(void){
-  if(s_anim) return; s_anim=true; s_anim_ms=0;
+  if(s_anim) return;
+  s_anim=true; s_anim_ms=0;
   s_timer=app_timer_register(WAVE_ANIM_INTERVAL,anim_cb,NULL);
 }
 
