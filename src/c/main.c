@@ -542,15 +542,14 @@ static void draw_sand(GContext *ctx, GRect b) {
 // DRAW: BATTERY UMBRELLA
 // ============================================================================
 static void draw_battery(GContext *ctx, GRect b) {
-  // Beach umbrella — canopy shows battery as colored segments
-  // Bigger, more visible, no radial fill (avoids crash)
-  int cx=65;              // Center X (inset for round bezel)
+  // Simple beach umbrella — 5 colored blocks for battery segments
+  int cx=62;
   int pole_bot=b.size.h-42;
-  int pole_top=pole_bot-18;
-  int r=18;               // Canopy radius
-  int canopy_y=pole_top-3; // Canopy center Y
+  int pole_top=pole_bot-16;
+  int r=14;
+  int dome_y=pole_top-1;
 
-  // Pole (brown stick)
+  // Pole
   #ifdef PBL_COLOR
   graphics_context_set_fill_color(ctx,C_SIGN_P);
   #else
@@ -558,27 +557,19 @@ static void draw_battery(GContext *ctx, GRect b) {
   #endif
   graphics_fill_rect(ctx,GRect(cx-1,pole_top,3,pole_bot-pole_top),0,GCornerNone);
 
-  // Canopy: draw as a series of vertical slices (left to right)
-  // Battery determines how many slices are colored vs gray
-  int total_slices=r*2;  // One slice per pixel width
-  int filled_slices=(s_bat*total_slices)/100;
+  // Canopy: 5 colored segments (each = 20% battery)
+  // Draw as simple rectangles of decreasing height to form dome shape
+  int seg_w=(r*2)/5;
+  int segs=5;
+  int filled=(s_bat+19)/20;  // 0-5 segments filled
+  int heights[]={6, 10, 12, 10, 6};  // Dome profile
 
-  for(int dx=-r;dx<=r;dx++){
-    // Height of this slice (circle equation: h = sqrt(r²-dx²))
-    int h_sq=r*r-dx*dx;
-    if(h_sq<=0) continue;
-    // Approximate sqrt with integer math
-    int h=0;
-    for(int t=r;t>=1;t>>=1) if((h+t)*(h+t)<=h_sq) h+=t;
-    if(h<=0) continue;
-
-    // Only draw upper half (dome)
-    int slice_x=cx+dx;
-    int slice_idx=dx+r;  // 0 to total_slices
+  for(int i=0;i<segs;i++){
+    int sx=cx-r+i*seg_w;
+    int sh=heights[i];
 
     #ifdef PBL_COLOR
-    if(slice_idx<filled_slices){
-      // Colored: battery level color
+    if(i<filled){
       GColor bc;
       if(s_bat<=20) bc=GColorRed;
       else if(s_bat<=40) bc=GColorOrange;
@@ -586,36 +577,19 @@ static void draw_battery(GContext *ctx, GRect b) {
       else bc=GColorGreen;
       graphics_context_set_fill_color(ctx,bc);
     } else {
-      // Empty portion
       graphics_context_set_fill_color(ctx,GColorDarkGray);
     }
     #else
-    graphics_context_set_fill_color(ctx,
-      (slice_idx<filled_slices)?GColorWhite:GColorLightGray);
+    graphics_context_set_fill_color(ctx,(i<filled)?GColorWhite:GColorLightGray);
     #endif
-
-    graphics_fill_rect(ctx,GRect(slice_x,canopy_y-h,1,h),0,GCornerNone);
+    graphics_fill_rect(ctx,GRect(sx,dome_y-sh,seg_w-1,sh),0,GCornerNone);
   }
 
-  // Canopy bottom edge line
-  #ifdef PBL_COLOR
+  // Bottom edge
   graphics_context_set_fill_color(ctx,GColorWhite);
-  #else
-  graphics_context_set_fill_color(ctx,GColorBlack);
-  #endif
-  graphics_fill_rect(ctx,GRect(cx-r,canopy_y,r*2+1,2),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(cx-r,dome_y,r*2,2),0,GCornerNone);
 
-  // Stripe lines on canopy (3 white lines radiating from pole top)
-  graphics_context_set_stroke_color(ctx,GColorWhite);
-  graphics_context_set_stroke_width(ctx,1);
-  for(int i=1;i<=3;i++){
-    int32_t a=DEG_TO_TRIGANGLE(180+i*45);
-    int lx=cx+(sin_lookup(a)*r)/TRIG_MAX_RATIO;
-    int ly=canopy_y-(cos_lookup(a)*r)/TRIG_MAX_RATIO;
-    if(ly<canopy_y) graphics_draw_line(ctx,GPoint(cx,canopy_y),GPoint(lx,ly));
-  }
-
-  // HIGH detail: percentage text centered under umbrella
+  // HIGH detail: percentage under pole
   if(s_det==DETAIL_HIGH){
     char bb[6]; snprintf(bb,sizeof(bb),"%d%%",s_bat);
     GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
@@ -880,9 +854,8 @@ static void tick_cb(struct tm *t, TimeUnits u){
 }
 static void bat_cb(BatteryChargeState s){
   s_bat=s.charge_percent;
-  // Don't mark dirty here — animation loop handles redraws.
-  // If not animating, just mark dirty for next redraw.
-  if(!s_anim && s_canvas) layer_mark_dirty(s_canvas);
+  // Never mark dirty here — animation loop or minute tick handles it.
+  // This prevents battery slider from disrupting the animation timer.
 }
 static void bt_cb(bool c){
   s_bt=c; if(!c) vibes_short_pulse();
