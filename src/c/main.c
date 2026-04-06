@@ -261,28 +261,32 @@ static void draw_sky(GContext *ctx, GRect b) {
     int twi=twi_pct();
     #ifdef PBL_COLOR
     if(twi>20) {
-      // Dawn/dusk: smooth dithered gradient with 2px rows
+      // Dawn/dusk: 5 solid bands with dithered edges between them
       GColor sc[] = {
         GColorOxfordBlue,
         GColorImperialPurple,
-        GColorPurple,
-        GColorDarkCandyAppleRed,
         GColorMagenta,
-        GColorSunsetOrange,
-        GColorMelon,
         C_SKY_DUSK,
         GColorRajah,
-        GColorChromeYellow,
       };
-      int n=10;
-      for(int y=0;y<sy;y+=2){
-        int pos=(y*(n-1)*100)/sy;
-        int idx=pos/100;
-        int frac=pos%100;
-        if(idx>=n-1){idx=n-2;frac=99;}
-        GColor c=(frac<50||(frac<60&&((y/2)%2==0)))?sc[idx]:sc[idx+1];
-        graphics_context_set_fill_color(ctx,c);
-        graphics_fill_rect(ctx,GRect(0,y,b.size.w,2),0,GCornerNone);
+      int n=5;
+      int bh=sy/n; if(bh<1) bh=1;
+      for(int i=0;i<n;i++){
+        int y0=bh*i;
+        int h1=(i==n-1)?sy-bh*i:bh;
+        // Solid fill for main band
+        graphics_context_set_fill_color(ctx,sc[i]);
+        graphics_fill_rect(ctx,GRect(0,y0,b.size.w,h1),0,GCornerNone);
+        // Dither transition: blend 6px at bottom edge into next color
+        if(i<n-1){
+          int dith_start=y0+h1-6;
+          for(int dy=0;dy<6;dy++){
+            if((dy+dith_start)%2==0){
+              graphics_context_set_fill_color(ctx,sc[i+1]);
+              graphics_fill_rect(ctx,GRect(0,dith_start+dy,b.size.w,1),0,GCornerNone);
+            }
+          }
+        }
       }
     } else {
       // Normal day: solid blue sky
@@ -410,28 +414,18 @@ static void draw_ocean(GContext *ctx, GRect b) {
   if(sy<=tb) return;
   int oh=sy-tb;
 
-  // Smooth dithered ocean gradient with 2px rows
+  // Clean solid ocean gradient: cobalt → blue → teal near shore
   #ifdef PBL_COLOR
   {
-    GColor oc[] = {
-      GColorCobaltBlue,
-      GColorDukeBlue,
-      GColorBlue,
-      GColorVividCerulean,
-      GColorPictonBlue,
-      GColorCeleste,
-      GColorTiffanyBlue
-    };
-    int n=7;
-    for(int y=0;y<oh;y+=2){
-      int pos=(y*(n-1)*100)/oh;
-      int idx=pos/100;
-      int frac=pos%100;
-      if(idx>=n-1){idx=n-2;frac=99;}
-      GColor c=(frac<50||(frac<60&&((y/2)%2==0)))?oc[idx]:oc[idx+1];
-      graphics_context_set_fill_color(ctx,c);
-      graphics_fill_rect(ctx,GRect(0,tb+y,b.size.w,2),0,GCornerNone);
-    }
+    int b3=oh/3; if(b3<1) b3=1;
+    graphics_context_set_fill_color(ctx,C_OCEAN);        // Cobalt
+    graphics_fill_rect(ctx,GRect(0,tb,b.size.w,b3),0,GCornerNone);
+    graphics_context_set_fill_color(ctx,GColorBlue);
+    graphics_fill_rect(ctx,GRect(0,tb+b3,b.size.w,b3),0,GCornerNone);
+    graphics_context_set_fill_color(ctx,GColorVividCerulean);
+    graphics_fill_rect(ctx,GRect(0,tb+b3*2,b.size.w,b3),0,GCornerNone);
+    graphics_context_set_fill_color(ctx,GColorTiffanyBlue);
+    graphics_fill_rect(ctx,GRect(0,tb+b3*3,b.size.w,oh-b3*3),0,GCornerNone);
   }
   #else
   graphics_context_set_fill_color(ctx,GColorBlack);
@@ -672,17 +666,21 @@ static void draw_hud(GContext *ctx, GRect b) {
   // -- DATE --
   txt(ctx,s_dbuf,f18,GRect(0,ty+42,b.size.w,22),GTextAlignmentCenter);
 
-  // -- SUNRISE/SUNSET at 9 and 3 o'clock (HIGH only) --
-  if(s_det>=DETAIL_HIGH) {
+  // -- SUNRISE/SUNSET at 9 and 3 o'clock --
+  // MED: times only. HIGH: labels + times.
+  if(s_det>=DETAIL_MED) {
     snprintf(s_sr,sizeof(s_sr),"%d:%02d",s_d.sr_h,s_d.sr_m);
     snprintf(s_ss,sizeof(s_ss),"%d:%02d",s_d.ss_h,s_d.ss_m);
-    int mid_y=b.size.h/2;  // True center = 3/9 o'clock
-    // Left (9 o'clock) - Sunrise
-    txt(ctx,"Sunrise",f14,GRect(8,mid_y-18,60,16),GTextAlignmentLeft);
-    txt(ctx,s_sr,f14,GRect(8,mid_y-4,50,18),GTextAlignmentLeft);
-    // Right (3 o'clock) - Sunset
-    txt(ctx,"Sunset",f14,GRect(b.size.w-68,mid_y-18,60,16),GTextAlignmentRight);
-    txt(ctx,s_ss,f14,GRect(b.size.w-58,mid_y-4,50,18),GTextAlignmentRight);
+    int mid_y=b.size.h/2;
+    if(s_det>=DETAIL_HIGH) {
+      // HIGH: labels above times
+      txt(ctx,"Sunrise",f14,GRect(8,mid_y-18,60,16),GTextAlignmentLeft);
+      txt(ctx,"Sunset",f14,GRect(b.size.w-68,mid_y-18,60,16),GTextAlignmentRight);
+    }
+    // Times at 9 and 3 o'clock
+    int time_y=(s_det>=DETAIL_HIGH)?mid_y-4:mid_y-10;
+    txt(ctx,s_sr,f14,GRect(8,time_y,50,18),GTextAlignmentLeft);
+    txt(ctx,s_ss,f14,GRect(b.size.w-58,time_y,50,18),GTextAlignmentRight);
   }
 
   // -- TIDE INFO (MED + HIGH) --
@@ -714,14 +712,7 @@ static void draw_hud(GContext *ctx, GRect b) {
     }
 
     // Fixed position at bottom of screen
-    int iy=b.size.h-42;
-
-    if(s_det==DETAIL_HIGH && s_d.town[0]){
-      graphics_context_set_text_color(ctx,C_INFO);
-      graphics_draw_text(ctx,s_d.town,f14,GRect(0,iy,b.size.w,16),
-        GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
-      iy+=13;
-    }
+    int iy=b.size.h-40;
     graphics_context_set_text_color(ctx,C_SHAD);
     graphics_draw_text(ctx,s_t1,f14,GRect(1,iy+1,b.size.w,18),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
