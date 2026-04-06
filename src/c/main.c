@@ -615,13 +615,13 @@ static void draw_battery(GContext *ctx, GRect b) {
     if(ly<canopy_y) graphics_draw_line(ctx,GPoint(cx,canopy_y),GPoint(lx,ly));
   }
 
-  // HIGH detail: percentage text to the right of pole
+  // HIGH detail: percentage text centered under umbrella
   if(s_det==DETAIL_HIGH){
     char bb[6]; snprintf(bb,sizeof(bb),"%d%%",s_bat);
     GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
     graphics_context_set_text_color(ctx,C_INFO);
-    graphics_draw_text(ctx,bb,f,GRect(cx+r-5,pole_bot-14,35,16),
-      GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
+    graphics_draw_text(ctx,bb,f,GRect(cx-18,pole_bot+1,36,16),
+      GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 }
 
@@ -880,7 +880,9 @@ static void tick_cb(struct tm *t, TimeUnits u){
 }
 static void bat_cb(BatteryChargeState s){
   s_bat=s.charge_percent;
-  if(s_canvas) layer_mark_dirty(s_canvas);
+  // Don't mark dirty here — animation loop handles redraws.
+  // If not animating, just mark dirty for next redraw.
+  if(!s_anim && s_canvas) layer_mark_dirty(s_canvas);
 }
 static void bt_cb(bool c){
   s_bt=c; if(!c) vibes_short_pulse();
