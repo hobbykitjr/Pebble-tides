@@ -387,21 +387,18 @@ static void draw_ocean(GContext *ctx, GRect b) {
   if(sy<=tb) return;
   int oh=sy-tb;
 
-  // Gradient: dark blue at top → medium → light/teal near shore
+  // Gentle gradient: cobalt → blue → vivid cerulean → tiffany near shore
   #ifdef PBL_COLOR
-  int band=oh/4; if(band<1) band=1;
-  // Dark blue at horizon
-  graphics_context_set_fill_color(ctx,GColorOxfordBlue);
-  graphics_fill_rect(ctx,GRect(0,tb,b.size.w,band),0,GCornerNone);
-  // Medium blue
-  graphics_context_set_fill_color(ctx,C_OCEAN);
-  graphics_fill_rect(ctx,GRect(0,tb+band,b.size.w,band),0,GCornerNone);
-  // Lighter blue
+  int b3=oh/3; if(b3<1) b3=1;
+  graphics_context_set_fill_color(ctx,C_OCEAN);      // Cobalt blue
+  graphics_fill_rect(ctx,GRect(0,tb,b.size.w,b3),0,GCornerNone);
   graphics_context_set_fill_color(ctx,GColorBlue);
-  graphics_fill_rect(ctx,GRect(0,tb+band*2,b.size.w,band),0,GCornerNone);
-  // Teal near shore
+  graphics_fill_rect(ctx,GRect(0,tb+b3,b.size.w,b3),0,GCornerNone);
+  graphics_context_set_fill_color(ctx,GColorVividCerulean);
+  graphics_fill_rect(ctx,GRect(0,tb+b3*2,b.size.w,b3),0,GCornerNone);
+  // Teal strip near shore
   graphics_context_set_fill_color(ctx,GColorTiffanyBlue);
-  graphics_fill_rect(ctx,GRect(0,tb+band*3,b.size.w,oh-band*3),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(0,tb+b3*3,b.size.w,oh-b3*3),0,GCornerNone);
   #else
   graphics_context_set_fill_color(ctx,GColorBlack);
   graphics_fill_rect(ctx,GRect(0,tb,b.size.w,oh),0,GCornerNone);
@@ -461,14 +458,38 @@ static void draw_waves(GContext *ctx, GRect b) {
 // ============================================================================
 static void draw_sand(GContext *ctx, GRect b) {
   int sy=sand_y(b.size.h);
+
+  // Main sand fill
   graphics_context_set_fill_color(ctx,C_SAND);
   graphics_fill_rect(ctx,GRect(0,sy,b.size.w,b.size.h-sy),0,GCornerNone);
+
   #ifdef PBL_COLOR
+  // Wavy wet sand — follows the same wave shape as foam line
   graphics_context_set_fill_color(ctx,C_SAND_WET);
-  graphics_fill_rect(ctx,GRect(0,sy,b.size.w,5),0,GCornerNone);
+  int step=4;
+  for(int x=0;x<b.size.w;x+=step){
+    int32_t a=(s_waves[0].phase+(x*TRIG_MAX_ANGLE*2/b.size.w))%TRIG_MAX_ANGLE;
+    int16_t wb=(sin_lookup(a)*3)/TRIG_MAX_RATIO;
+    int16_t yo=(sin_lookup(s_waves[0].phase)*s_waves[0].amp)/TRIG_MAX_RATIO;
+    int wy=sy+yo+wb;
+    // Wet sand band: 8px tall following wave contour
+    if(wy>=sy-2) graphics_fill_rect(ctx,GRect(x,wy,step,8),0,GCornerNone);
+  }
+
+  // Subtle darker sand band below wet sand (gradient effect)
   graphics_context_set_fill_color(ctx,C_SAND_DK);
-  int d[][2]={{30,8},{70,14},{120,10},{170,16},{220,12},{50,22},{100,20},{160,24}};
-  for(int i=0;i<8;i++){int py=sy+5+d[i][1];
+  for(int x=0;x<b.size.w;x+=step){
+    int32_t a=(s_waves[0].phase+(x*TRIG_MAX_ANGLE*2/b.size.w))%TRIG_MAX_ANGLE;
+    int16_t wb=(sin_lookup(a)*2)/TRIG_MAX_RATIO;
+    int16_t yo=(sin_lookup(s_waves[0].phase)*s_waves[0].amp)/TRIG_MAX_RATIO;
+    int wy=sy+yo+wb+8;
+    if(wy>=sy) graphics_fill_rect(ctx,GRect(x,wy,step,4),0,GCornerNone);
+  }
+
+  // Sand texture dots
+  graphics_context_set_fill_color(ctx,C_SAND_DK);
+  int d[][2]={{30,16},{70,22},{120,18},{170,24},{220,20},{50,28},{100,26},{160,30}};
+  for(int i=0;i<8;i++){int py=sy+d[i][1];
     if(d[i][0]<b.size.w&&py<b.size.h)
       graphics_fill_rect(ctx,GRect(d[i][0],py,2,2),0,GCornerNone);}
   #endif
