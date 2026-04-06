@@ -805,57 +805,18 @@ static void battery_callback(BatteryChargeState state) {
 }
 
 static void tap_handler(AccelAxisType axis, int32_t direction) {
+  #if DEV_MODE
+  if (s_test_preset >= 0 || !s_tide.data_valid) {
+    // In dev mode: tap cycles to next preset
+    s_test_preset++;
+    if (s_test_preset >= NUM_TEST_PRESETS) s_test_preset = 0;
+    apply_test_preset(s_test_preset);
+    APP_LOG(APP_LOG_LEVEL_INFO, "DEV preset %d: %s", s_test_preset,
+            s_preset_names[s_test_preset]);
+  }
+  #endif
   start_wave_animation();
 }
-
-#if DEV_MODE
-// ============================================================================
-// DEV MODE - BUTTON HANDLERS
-// ============================================================================
-static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
-  // Next preset
-  s_test_preset++;
-  if (s_test_preset >= NUM_TEST_PRESETS) s_test_preset = 0;
-  apply_test_preset(s_test_preset);
-  start_wave_animation();
-  APP_LOG(APP_LOG_LEVEL_INFO, "DEV preset %d: %s", s_test_preset,
-          s_preset_names[s_test_preset]);
-}
-
-static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
-  // Previous preset
-  s_test_preset--;
-  if (s_test_preset < 0) s_test_preset = NUM_TEST_PRESETS - 1;
-  apply_test_preset(s_test_preset);
-  start_wave_animation();
-  APP_LOG(APP_LOG_LEVEL_INFO, "DEV preset %d: %s", s_test_preset,
-          s_preset_names[s_test_preset]);
-}
-
-static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  // Toggle between minimal and detailed display
-  s_display_mode = (s_display_mode == DISPLAY_MODE_MINIMAL)
-                   ? DISPLAY_MODE_DETAILED : DISPLAY_MODE_MINIMAL;
-  if (s_canvas_layer) layer_mark_dirty(s_canvas_layer);
-  APP_LOG(APP_LOG_LEVEL_INFO, "DEV display mode: %s",
-          s_display_mode ? "DETAILED" : "MINIMAL");
-}
-
-static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
-  // Long press select: return to live data
-  s_test_preset = -1;
-  update_time();
-  if (s_canvas_layer) layer_mark_dirty(s_canvas_layer);
-  APP_LOG(APP_LOG_LEVEL_INFO, "DEV: back to live data");
-}
-
-static void click_config_provider(void *context) {
-  window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
-  window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
-  window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
-  window_long_click_subscribe(BUTTON_ID_SELECT, 700, select_long_click_handler, NULL);
-}
-#endif
 
 // ============================================================================
 // APPMESSAGE HANDLERS
@@ -977,6 +938,16 @@ static void main_window_load(Window *window) {
   // Initial time
   update_time();
 
+  #if DEV_MODE
+  // Auto-load first preset if no persisted data (e.g. fresh emulator)
+  if (!s_tide.data_valid) {
+    s_test_preset = 0;
+    apply_test_preset(s_test_preset);
+    s_display_mode = DISPLAY_MODE_DETAILED;
+    APP_LOG(APP_LOG_LEVEL_INFO, "DEV: auto-loaded preset 0, tap to cycle");
+  }
+  #endif
+
   // Brief startup animation
   start_wave_animation();
 }
@@ -1004,10 +975,6 @@ static void init(void) {
     .load = main_window_load,
     .unload = main_window_unload
   });
-
-  #if DEV_MODE
-  window_set_click_config_provider(s_main_window, click_config_provider);
-  #endif
 
   window_stack_push(s_main_window, true);
 
