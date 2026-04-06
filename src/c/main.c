@@ -261,40 +261,32 @@ static void draw_sky(GContext *ctx, GRect b) {
     int twi=twi_pct();
     #ifdef PBL_COLOR
     if(twi>20) {
-      // Dawn/dusk: 5 solid bands with dithered edges between them
+      // Dawn/dusk: ombré gradient — continuous color sweep, no visible bands
       GColor sc[] = {
         GColorOxfordBlue,
         GColorImperialPurple,
+        GColorPurple,
         GColorMagenta,
+        GColorSunsetOrange,
         C_SKY_DUSK,
         GColorRajah,
       };
-      int n=5;
-      int bh=sy/n; if(bh<1) bh=1;
-      for(int i=0;i<n;i++){
-        int y0=bh*i;
-        int h1=(i==n-1)?sy-bh*i:bh;
-        // Solid fill for main band
-        graphics_context_set_fill_color(ctx,sc[i]);
-        graphics_fill_rect(ctx,GRect(0,y0,b.size.w,h1),0,GCornerNone);
-        // Dither transition: blend at band edges for smooth gradient
-        if(i<n-1){
-          // 16px dither zone: gradually transition from this color to next
-          int dz=16;
-          int dith_start=y0+h1-dz;
-          for(int dy=0;dy<dz;dy++){
-            // More next-color rows as we go deeper into the zone
-            // First half: every 3rd row. Second half: every other row.
-            bool use_next;
-            if(dy<dz/3) use_next=((dy%3)==0);
-            else if(dy<dz*2/3) use_next=((dy%2)==0);
-            else use_next=((dy%3)!=0);
-            if(use_next){
-              graphics_context_set_fill_color(ctx,sc[i+1]);
-              graphics_fill_rect(ctx,GRect(0,dith_start+dy,b.size.w,1),0,GCornerNone);
-            }
-          }
-        }
+      int n=7;
+      // Draw every 2px row, smoothly interpolating across all colors
+      for(int y=0;y<sy;y+=2){
+        // Position in color array as fixed-point (0 to (n-1)*1000)
+        int pos=(y*(n-1)*1000)/sy;
+        int idx=pos/1000;           // Base color index
+        int frac=pos%1000;          // 0-999 blend fraction
+        if(idx>=n-1){idx=n-2;frac=999;}
+        // Checkerboard dither: even rows bias toward current, odd toward next
+        // This creates smooth sub-pixel blending between adjacent colors
+        int threshold=500;
+        if((y/2)%2==0) threshold=550;  // Even: slightly favor current
+        else threshold=450;             // Odd: slightly favor next
+        GColor c=(frac<threshold)?sc[idx]:sc[idx+1];
+        graphics_context_set_fill_color(ctx,c);
+        graphics_fill_rect(ctx,GRect(0,y,b.size.w,2),0,GCornerNone);
       }
     } else {
       // Normal day: solid blue sky
