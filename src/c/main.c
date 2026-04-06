@@ -889,6 +889,10 @@ static void tap_cb(AccelAxisType axis, int32_t dir) {
     s_preset++;
     if(s_preset>=NUM_TEST_PRESETS) s_preset=0;
     apply_preset(s_preset);
+    // Fly airplane on preset transition
+    s_plane_active = true;
+    s_plane_x = -50;
+    s_data_refreshing = false; // Show "Updated!" immediately
     APP_LOG(APP_LOG_LEVEL_INFO,"DEV %d: %s",s_preset,s_preset_names[s_preset]);
   }
   #else
