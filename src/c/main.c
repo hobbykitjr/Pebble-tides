@@ -550,82 +550,86 @@ static void draw_sand(GContext *ctx, GRect b) {
 // DRAW: BATTERY UMBRELLA
 // ============================================================================
 static void draw_battery(GContext *ctx, GRect b) {
-  // Beach umbrella with pie-chart canopy showing battery level
-  // Fixed position: left side, above tide text
-  int cx=55;             // Center X of canopy (inset for round bezel)
-  int pole_bot=b.size.h-38;  // Pole bottom
-  int pole_top=pole_bot-22;   // Pole top
-  int canopy_r=14;        // Canopy radius
+  // Beach umbrella — canopy shows battery as colored segments
+  // Bigger, more visible, no radial fill (avoids crash)
+  int cx=65;              // Center X (inset for round bezel)
+  int pole_bot=b.size.h-42;
+  int pole_top=pole_bot-18;
+  int r=18;               // Canopy radius
+  int canopy_y=pole_top-3; // Canopy center Y
 
-  // Pole
+  // Pole (brown stick)
   #ifdef PBL_COLOR
-  graphics_context_set_fill_color(ctx,C_SIGN_P);  // Brown
+  graphics_context_set_fill_color(ctx,C_SIGN_P);
   #else
   graphics_context_set_fill_color(ctx,GColorDarkGray);
   #endif
   graphics_fill_rect(ctx,GRect(cx-1,pole_top,3,pole_bot-pole_top),0,GCornerNone);
 
-  // Pole tip (small ball on top)
-  graphics_fill_circle(ctx,GPoint(cx,pole_top-1),2);
+  // Canopy: draw as a series of vertical slices (left to right)
+  // Battery determines how many slices are colored vs gray
+  int total_slices=r*2;  // One slice per pixel width
+  int filled_slices=(s_bat*total_slices)/100;
 
-  // Canopy background (empty/dark portion)
-  #ifdef PBL_COLOR
-  graphics_context_set_fill_color(ctx,GColorDarkGray);
-  #else
-  graphics_context_set_fill_color(ctx,GColorLightGray);
-  #endif
-  // Upper semicircle: from 180° to 360° in Pebble angles
-  GRect canopy_rect=GRect(cx-canopy_r, pole_top-canopy_r-2,
-                           canopy_r*2, canopy_r*2);
-  graphics_fill_radial(ctx,canopy_rect,GOvalScaleModeFitCircle,0,
-    DEG_TO_TRIGANGLE(180),DEG_TO_TRIGANGLE(360));
+  for(int dx=-r;dx<=r;dx++){
+    // Height of this slice (circle equation: h = sqrt(r²-dx²))
+    int h_sq=r*r-dx*dx;
+    if(h_sq<=0) continue;
+    // Approximate sqrt with integer math
+    int h=0;
+    for(int t=r;t>=1;t>>=1) if((h+t)*(h+t)<=h_sq) h+=t;
+    if(h<=0) continue;
 
-  // Canopy filled portion (battery level)
-  // Fill from left (180°) proportional to battery
-  // 100% = full semicircle, 0% = empty
-  if(s_bat>0){
+    // Only draw upper half (dome)
+    int slice_x=cx+dx;
+    int slice_idx=dx+r;  // 0 to total_slices
+
     #ifdef PBL_COLOR
-    GColor bat_color;
-    if(s_bat<=20) bat_color=GColorRed;
-    else if(s_bat<=40) bat_color=GColorOrange;
-    else if(s_bat<=60) bat_color=GColorChromeYellow;
-    else bat_color=GColorGreen;
-    graphics_context_set_fill_color(ctx,bat_color);
+    if(slice_idx<filled_slices){
+      // Colored: battery level color
+      GColor bc;
+      if(s_bat<=20) bc=GColorRed;
+      else if(s_bat<=40) bc=GColorOrange;
+      else if(s_bat<=60) bc=GColorChromeYellow;
+      else bc=GColorGreen;
+      graphics_context_set_fill_color(ctx,bc);
+    } else {
+      // Empty portion
+      graphics_context_set_fill_color(ctx,GColorDarkGray);
+    }
     #else
-    graphics_context_set_fill_color(ctx,GColorWhite);
+    graphics_context_set_fill_color(ctx,
+      (slice_idx<filled_slices)?GColorWhite:GColorLightGray);
     #endif
-    // Scale: 180° to (180 + bat*180/100)°
-    int end_angle=180+(s_bat*180)/100;
-    graphics_fill_radial(ctx,canopy_rect,GOvalScaleModeFitCircle,0,
-      DEG_TO_TRIGANGLE(180),DEG_TO_TRIGANGLE(end_angle));
+
+    graphics_fill_rect(ctx,GRect(slice_x,canopy_y-h,1,h),0,GCornerNone);
   }
 
-  // Canopy outline
+  // Canopy bottom edge line
   #ifdef PBL_COLOR
-  graphics_context_set_stroke_color(ctx,GColorWhite);
+  graphics_context_set_fill_color(ctx,GColorWhite);
   #else
-  graphics_context_set_stroke_color(ctx,GColorBlack);
+  graphics_context_set_fill_color(ctx,GColorBlack);
   #endif
-  graphics_context_set_stroke_width(ctx,1);
-  graphics_draw_arc(ctx,canopy_rect,GOvalScaleModeFitCircle,
-    DEG_TO_TRIGANGLE(180),DEG_TO_TRIGANGLE(360));
+  graphics_fill_rect(ctx,GRect(cx-r,canopy_y,r*2+1,2),0,GCornerNone);
 
-  // Stripe lines on canopy for umbrella look (3 lines)
+  // Stripe lines on canopy (3 white lines radiating from pole top)
+  graphics_context_set_stroke_color(ctx,GColorWhite);
+  graphics_context_set_stroke_width(ctx,1);
   for(int i=1;i<=3;i++){
-    int angle=180+i*45;  // Lines at 225°, 270°, 315°
-    int32_t a=DEG_TO_TRIGANGLE(angle);
-    int lx=cx+(sin_lookup(a)*canopy_r)/TRIG_MAX_RATIO;
-    int ly=(pole_top-canopy_r-2+canopy_r)-(cos_lookup(a)*canopy_r)/TRIG_MAX_RATIO;
-    graphics_draw_line(ctx,GPoint(cx,pole_top-2),GPoint(lx,ly));
+    int32_t a=DEG_TO_TRIGANGLE(180+i*45);
+    int lx=cx+(sin_lookup(a)*r)/TRIG_MAX_RATIO;
+    int ly=canopy_y-(cos_lookup(a)*r)/TRIG_MAX_RATIO;
+    if(ly<canopy_y) graphics_draw_line(ctx,GPoint(cx,canopy_y),GPoint(lx,ly));
   }
 
-  // HIGH detail: percentage text below
+  // HIGH detail: percentage text to the right of pole
   if(s_det==DETAIL_HIGH){
     char bb[6]; snprintf(bb,sizeof(bb),"%d%%",s_bat);
     GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
     graphics_context_set_text_color(ctx,C_INFO);
-    graphics_draw_text(ctx,bb,f,GRect(cx-20,pole_bot,40,16),
-      GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
+    graphics_draw_text(ctx,bb,f,GRect(cx+r-5,pole_bot-14,35,16),
+      GTextOverflowModeTrailingEllipsis,GTextAlignmentLeft,NULL);
   }
 }
 
