@@ -27,7 +27,7 @@
 
 // Airplane
 #define PLANE_SPEED       4
-#define PLANE_Y           52   // Fixed Y px — below temp, above time
+#define PLANE_Y           56   // Fixed Y px — below temp, above time
 
 // Detail levels
 #define DETAIL_LOW    0
@@ -454,7 +454,7 @@ static void draw_sand(GContext *ctx, GRect b) {
 // ============================================================================
 static void draw_shells(GContext *ctx, GRect b) {
   // Fixed position left side, above tide text area
-  int shy=b.size.h-58;
+  int shy=b.size.h-48;
   int num=(s_bat+19)/20;
   int bx=45;  // Inset for round bezel
   #ifdef PBL_COLOR
@@ -482,7 +482,7 @@ static void draw_shells(GContext *ctx, GRect b) {
 static void draw_bt(GContext *ctx, GRect b) {
   if(s_bt) return;
   // Fixed position right side, above tide text area
-  int sx=b.size.w-65, py=b.size.h-58;
+  int sx=b.size.w-65, py=b.size.h-48;
   graphics_context_set_fill_color(ctx,C_SIGN_P);
   graphics_fill_rect(ctx,GRect(sx+8,py,3,20),0,GCornerNone);
   graphics_context_set_fill_color(ctx,C_SIGN_B);
@@ -580,7 +580,7 @@ static void draw_hud(GContext *ctx, GRect b) {
     // Icon draws centered at its y param — align with temp text visual center
     // GOTHIC_24_BOLD renders ~20px tall, visual center at temp_y+10
     txt(ctx,s_tmp,f24,GRect(b.size.w/2-48,temp_y,48,28),GTextAlignmentRight);
-    draw_wx(ctx,b.size.w/2+16,temp_y+10,s_d.wx);  // Icon center = text center
+    draw_wx(ctx,b.size.w/2+16,temp_y+18,s_d.wx);  // Icon lower to match temp baseline
   } else {
     txt(ctx,s_tmp,f24,GRect(0,temp_y,b.size.w,28),GTextAlignmentCenter);
   }
@@ -633,8 +633,8 @@ static void draw_hud(GContext *ctx, GRect b) {
       snprintf(s_t2,sizeof(s_t2),"%s %d:%02d",fl,fh,fm);
     }
 
-    // Fixed position at bottom of screen (always visible)
-    int iy=b.size.h-52;
+    // Fixed position at bottom of screen
+    int iy=b.size.h-42;
 
     if(s_det==DETAIL_HIGH && s_d.town[0]){
       graphics_context_set_text_color(ctx,C_INFO);
