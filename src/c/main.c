@@ -20,14 +20,14 @@
 #define LOW_BATTERY_THRESHOLD 20
 
 // Layout zones (pct of 260px height)
-#define HORIZON_Y_PCT     50   // Horizon line: time/date row, low-tide sand line
-#define SAND_LOW_Y_PCT    50   // Sand top at low tide (= horizon)
-#define TIDE_SHIFT_PX     30   // Max tide shift: high tide water goes 30px above low
+// On a 260px round screen, center usable area is roughly 40-220 vertically
+#define HORIZON_Y_PCT     58   // Horizon / time row — slightly below center
+#define TIDE_SHIFT_PX     25   // Max tide shift above horizon for high tide
 
-// Sun arc
+// Sun arc (invisible path, only the sun dot is drawn)
 #define SUN_RADIUS        10
-#define SUN_ARC_TOP_Y_PCT 10   // Top of arc
-#define SUN_ARC_BOT_Y_PCT 48   // Horizon (sunrise/set position)
+#define SUN_ARC_TOP_Y_PCT 12   // Top of invisible arc
+#define SUN_ARC_BOT_Y_PCT 55   // Bottom of arc (at horizon)
 
 // Display modes
 #define DISPLAY_MODE_MINIMAL  0
@@ -252,30 +252,31 @@ static int get_water_y(int screen_h) {
 static void init_waves(int screen_h) {
   int horizon = (screen_h * HORIZON_Y_PCT) / 100;
 
-  // Waves are horizontal lines that oscillate vertically (toward/away from shore)
-  // Spaced evenly in the ocean zone above the water line
-  s_waves[0].base_y = horizon - 8;
+  // Waves spaced in the ocean zone, oscillate toward shore
+  // Front wave (closest to shore, fastest)
+  s_waves[0].base_y = horizon - 5;
   s_waves[0].phase = 0;
-  s_waves[0].amplitude = 3;
-  s_waves[0].speed = 400;
+  s_waves[0].amplitude = 4;
+  s_waves[0].speed = 350;
   s_waves[0].color = COLOR_OCEAN_FOAM;
 
-  s_waves[1].base_y = horizon - 20;
+  s_waves[1].base_y = horizon - 16;
   s_waves[1].phase = TRIG_MAX_ANGLE / 4;
-  s_waves[1].amplitude = 4;
-  s_waves[1].speed = 300;
+  s_waves[1].amplitude = 5;
+  s_waves[1].speed = 260;
   s_waves[1].color = COLOR_OCEAN_LIGHT;
 
-  s_waves[2].base_y = horizon - 35;
+  s_waves[2].base_y = horizon - 28;
   s_waves[2].phase = TRIG_MAX_ANGLE / 2;
-  s_waves[2].amplitude = 3;
-  s_waves[2].speed = 220;
+  s_waves[2].amplitude = 4;
+  s_waves[2].speed = 190;
   s_waves[2].color = COLOR_OCEAN_MID;
 
-  s_waves[3].base_y = horizon - 50;
+  // Back wave (farthest, slowest)
+  s_waves[3].base_y = horizon - 42;
   s_waves[3].phase = TRIG_MAX_ANGLE * 3 / 4;
-  s_waves[3].amplitude = 2;
-  s_waves[3].speed = 160;
+  s_waves[3].amplitude = 3;
+  s_waves[3].speed = 140;
   s_waves[3].color = COLOR_OCEAN_DEEP;
 }
 
@@ -311,37 +312,27 @@ static void draw_sky(GContext *ctx, GRect b) {
     graphics_fill_rect(ctx, GRect(0, horizon * 2 / 3, b.size.w, horizon / 3), 0, GCornerNone);
   }
 
-  // Orange sun arc path (always visible as a guide)
-  #ifdef PBL_COLOR
-  graphics_context_set_stroke_color(ctx, COLOR_SUN_ARC);
-  graphics_context_set_stroke_width(ctx, 3);
-  int arc_top = (b.size.h * SUN_ARC_TOP_Y_PCT) / 100;
-  int arc_bot = (b.size.h * SUN_ARC_BOT_Y_PCT) / 100;
-  int arc_h = arc_bot - arc_top;
-  GPoint prev = GPoint(b.size.w * 12 / 100, arc_bot);
-  for (int i = 1; i <= 20; i++) {
-    int pct = i * 100 / 20;
-    int x = b.size.w * 12 / 100 + (b.size.w * 76 / 100 * pct) / 100;
-    int centered = pct - 50;
-    int y = arc_bot - (arc_h * (2500 - centered * centered)) / 2500;
-    GPoint cur = GPoint(x, y);
-    graphics_draw_line(ctx, prev, cur);
-    prev = cur;
-  }
-  #endif
-
-  // Sun dot on arc
+  // Sun dot follows an invisible parabolic arc
+  // Inset X range for round display: 20%-80% of width
   int prog = get_sun_progress();
   if (prog >= 0) {
-    int arc_top2 = (b.size.h * SUN_ARC_TOP_Y_PCT) / 100;
-    int arc_bot2 = (b.size.h * SUN_ARC_BOT_Y_PCT) / 100;
-    int arc_h2 = arc_bot2 - arc_top2;
-    int sun_x = b.size.w * 12 / 100 + (b.size.w * 76 / 100 * prog) / 100;
+    int arc_top = (b.size.h * SUN_ARC_TOP_Y_PCT) / 100;
+    int arc_bot = (b.size.h * SUN_ARC_BOT_Y_PCT) / 100;
+    int arc_h = arc_bot - arc_top;
+    int sun_x = b.size.w * 20 / 100 + (b.size.w * 60 / 100 * prog) / 100;
     int centered = prog - 50;
-    int sun_y = arc_bot2 - (arc_h2 * (2500 - centered * centered)) / 2500;
+    int sun_y = arc_bot - (arc_h * (2500 - centered * centered)) / 2500;
 
+    // Sun glow
+    #ifdef PBL_COLOR
+    graphics_context_set_fill_color(ctx, GColorRajah);
+    graphics_fill_circle(ctx, GPoint(sun_x, sun_y), SUN_RADIUS + 3);
+    #endif
+
+    // Sun body
     graphics_context_set_fill_color(ctx, COLOR_SUN);
     graphics_fill_circle(ctx, GPoint(sun_x, sun_y), SUN_RADIUS);
+
     // Pixel rays
     #ifdef PBL_COLOR
     graphics_context_set_fill_color(ctx, GColorRajah);
@@ -498,7 +489,7 @@ static void draw_wave(GContext *ctx, const Wave *wave, GRect b) {
     int32_t seg_angle = (wave->phase + (x * TRIG_MAX_ANGLE / b.size.w)) % TRIG_MAX_ANGLE;
     int16_t x_wobble = (sin_lookup(seg_angle) * 2) / TRIG_MAX_RATIO;
     int sy = draw_y + x_wobble;
-    graphics_fill_rect(ctx, GRect(x, sy, step, 3), 0, GCornerNone);
+    graphics_fill_rect(ctx, GRect(x, sy, step, 5), 0, GCornerNone);
   }
 
   // Foam on front wave
@@ -564,50 +555,51 @@ static void draw_hud(GContext *ctx, GRect b) {
   int horizon = (b.size.h * HORIZON_Y_PCT) / 100;
   int water_y = get_water_y(b.size.h);
 
-  // -- TEMP + WEATHER ICON at top of sky --
+  // -- TEMP + WEATHER ICON centered at top of sky --
   GFont temp_font = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
-  snprintf(s_temp_buffer, sizeof(s_temp_buffer), "%d", s_tide.temperature);
-  // Position: centered, below arc top
-  int temp_y = (b.size.h * SUN_ARC_TOP_Y_PCT) / 100 + 2;
-  draw_text_shadow(ctx, s_temp_buffer, temp_font,
-    GRect(b.size.w/2 - 30, temp_y, 40, 28), GTextAlignmentRight);
-  // Degree symbol
-  GFont small = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-  graphics_context_set_text_color(ctx, COLOR_TEXT);
-  graphics_draw_text(ctx, "o", small,
-    GRect(b.size.w/2 + 12, temp_y - 2, 10, 14),
-    GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  snprintf(s_temp_buffer, sizeof(s_temp_buffer), "%d°", s_tide.temperature);
 
-  // Weather icon to right of temp
-  if (s_tide.weather_code != WX_CLEAR) {
-    draw_weather_icon(ctx, GPoint(b.size.w/2 + 30, temp_y + 12), s_tide.weather_code);
+  // Measure temp text width to center temp+icon as a group
+  int temp_y = 42;  // Fixed Y near top of visible round area
+  int icon_present = (s_tide.weather_code != WX_CLEAR) ? 1 : 0;
+
+  if (icon_present) {
+    // Temp text on left of center, icon on right
+    draw_text_shadow(ctx, s_temp_buffer, temp_font,
+      GRect(b.size.w/2 - 50, temp_y, 50, 28), GTextAlignmentRight);
+    draw_weather_icon(ctx, GPoint(b.size.w/2 + 14, temp_y + 12), s_tide.weather_code);
+  } else {
+    // No icon: just center the temp
+    draw_text_shadow(ctx, s_temp_buffer, temp_font,
+      GRect(0, temp_y, b.size.w, 28), GTextAlignmentCenter);
   }
 
   // -- TIME centered at horizon --
   GFont time_font = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
-  int time_y = horizon - 52;
+  int time_y = horizon - 50;
   draw_text_shadow(ctx, s_time_buffer, time_font,
     GRect(0, time_y, b.size.w, 50), GTextAlignmentCenter);
 
   // -- DATE below time --
   GFont date_font = fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
   draw_text_shadow(ctx, s_date_buffer, date_font,
-    GRect(0, time_y + 42, b.size.w, 22), GTextAlignmentCenter);
+    GRect(0, time_y + 44, b.size.w, 22), GTextAlignmentCenter);
 
   // -- SUNRISE left, SUNSET right, flanking time --
+  // Inset more for round display (bezel clips edges)
   GFont sun_font = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   snprintf(s_sunrise_buffer, sizeof(s_sunrise_buffer), "%d:%02d",
            s_tide.sunrise_hour, s_tide.sunrise_min);
   snprintf(s_sunset_buffer, sizeof(s_sunset_buffer), "%d:%02d",
            s_tide.sunset_hour, s_tide.sunset_min);
 
-  int sun_y = time_y + 10;
-  // Left side (sunrise)
+  int sun_y = time_y + 14;
+  // Left side — inset 35px from edge for round bezel
   draw_text_shadow(ctx, s_sunrise_buffer, sun_font,
-    GRect(10, sun_y, 50, 18), GTextAlignmentLeft);
-  // Right side (sunset)
+    GRect(35, sun_y, 50, 18), GTextAlignmentLeft);
+  // Right side — inset 35px
   draw_text_shadow(ctx, s_sunset_buffer, sun_font,
-    GRect(b.size.w - 60, sun_y, 50, 18), GTextAlignmentRight);
+    GRect(b.size.w - 85, sun_y, 50, 18), GTextAlignmentRight);
 
   // -- TIDE INFO on sand --
   // Logic:
