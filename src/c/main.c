@@ -749,8 +749,13 @@ static void animation_timer_callback(void *data) {
   }
 
   // Stop animation after duration or on low battery
-  if (s_anim_elapsed >= WAVE_ANIM_DURATION ||
-      (s_battery_level <= LOW_BATTERY_THRESHOLD)) {
+  // In dev mode, keep animating continuously
+  #if DEV_MODE
+  bool should_stop = false;
+  #else
+  bool should_stop = (s_anim_elapsed >= WAVE_ANIM_DURATION);
+  #endif
+  if (should_stop || (s_battery_level <= LOW_BATTERY_THRESHOLD)) {
     s_is_animating = false;
     s_animation_timer = NULL;
     return;

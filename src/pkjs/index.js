@@ -40,10 +40,46 @@ function xhrRequest(url, type, callback, errorCallback) {
 // ============================================================================
 // GEOCODING: ZIP CODE -> LAT/LNG
 // ============================================================================
+
+// Check if input looks like a US ZIP code (5 digits or 5+4)
+function isUSZip(str) {
+  return /^\d{5}(-\d{4})?$/.test(str.trim());
+}
+
 function geocodeZip(zipCode, callback) {
-  // Using Open-Meteo geocoding (free, no API key)
+  if (isUSZip(zipCode)) {
+    // For US ZIP codes, use zippopotam.us directly (reliable for ZIPs)
+    console.log('Geocoding US ZIP: ' + zipCode);
+    geocodeWithZippopotamus(zipCode, callback);
+  } else {
+    // For non-ZIP input (city name, etc.), try Open-Meteo
+    geocodeWithOpenMeteo(zipCode, callback);
+  }
+}
+
+function geocodeWithZippopotamus(zipCode, callback) {
+  var url = 'https://api.zippopotam.us/us/' + zipCode.trim();
+  xhrRequest(url, 'GET', function (responseText) {
+    try {
+      var json = JSON.parse(responseText);
+      var lat = parseFloat(json.places[0].latitude);
+      var lng = parseFloat(json.places[0].longitude);
+      var name = json.places[0]['place name'] + ', ' + json.places[0]['state abbreviation'];
+      console.log('Zippopotam.us resolved: ' + name + ' (' + lat + ', ' + lng + ')');
+      callback(lat, lng, name);
+    } catch (e) {
+      console.log('Zippopotam.us failed, trying Open-Meteo: ' + e);
+      geocodeWithOpenMeteo(zipCode, callback);
+    }
+  }, function () {
+    console.log('Zippopotam.us error, trying Open-Meteo');
+    geocodeWithOpenMeteo(zipCode, callback);
+  });
+}
+
+function geocodeWithOpenMeteo(query, callback) {
   var url = 'https://geocoding-api.open-meteo.com/v1/search?name=' +
-            encodeURIComponent(zipCode) + '&count=1&language=en&format=json';
+            encodeURIComponent(query) + '&count=1&language=en&format=json';
 
   xhrRequest(url, 'GET', function (responseText) {
     try {
@@ -52,29 +88,10 @@ function geocodeZip(zipCode, callback) {
         var result = json.results[0];
         callback(result.latitude, result.longitude, result.name);
       } else {
-        // Fallback: try as US zip with zippopotam.us
-        geocodeZipFallback(zipCode, callback);
+        console.log('Open-Meteo: no results for ' + query);
       }
     } catch (e) {
-      console.log('Geocode parse error: ' + e);
-      geocodeZipFallback(zipCode, callback);
-    }
-  }, function () {
-    geocodeZipFallback(zipCode, callback);
-  });
-}
-
-function geocodeZipFallback(zipCode, callback) {
-  var url = 'https://api.zippopotam.us/us/' + zipCode;
-  xhrRequest(url, 'GET', function (responseText) {
-    try {
-      var json = JSON.parse(responseText);
-      var lat = parseFloat(json.places[0].latitude);
-      var lng = parseFloat(json.places[0].longitude);
-      var name = json.places[0]['place name'];
-      callback(lat, lng, name);
-    } catch (e) {
-      console.log('Fallback geocode failed: ' + e);
+      console.log('Open-Meteo geocode error: ' + e);
     }
   });
 }
@@ -255,22 +272,41 @@ function processTideData(predictions) {
 // ============================================================================
 // SUNRISE/SUNSET API
 // ============================================================================
+// Parse "h:mm:ss AM/PM" format from sunrise-sunset.org (formatted=1)
+function parseSunTime(timeStr) {
+  // e.g. "6:23:45 AM" or "7:45:12 PM"
+  var parts = timeStr.trim().split(' ');
+  var timeParts = parts[0].split(':');
+  var hour = parseInt(timeParts[0]);
+  var min = parseInt(timeParts[1]);
+  var ampm = parts[1];
+
+  if (ampm === 'PM' && hour !== 12) hour += 12;
+  if (ampm === 'AM' && hour === 12) hour = 0;
+
+  return { hour: hour, min: min };
+}
+
 function fetchSunriseSunset(lat, lng, callback) {
+  // formatted=1 returns times in location's local timezone as "h:mm:ss AM/PM"
   var url = 'https://api.sunrise-sunset.org/json?lat=' + lat +
-            '&lng=' + lng + '&formatted=0&date=today';
+            '&lng=' + lng + '&formatted=1&date=today';
 
   xhrRequest(url, 'GET', function (responseText) {
     try {
       var json = JSON.parse(responseText);
       if (json.status === 'OK') {
-        var sunrise = new Date(json.results.sunrise);
-        var sunset = new Date(json.results.sunset);
+        var sunrise = parseSunTime(json.results.sunrise);
+        var sunset = parseSunTime(json.results.sunset);
+
+        console.log('Sun times (local): rise=' + sunrise.hour + ':' +
+                    sunrise.min + ' set=' + sunset.hour + ':' + sunset.min);
 
         callback({
-          sunriseHour: sunrise.getHours(),
-          sunriseMin: sunrise.getMinutes(),
-          sunsetHour: sunset.getHours(),
-          sunsetMin: sunset.getMinutes()
+          sunriseHour: sunrise.hour,
+          sunriseMin: sunrise.min,
+          sunsetHour: sunset.hour,
+          sunsetMin: sunset.min
         });
       }
     } catch (e) {
