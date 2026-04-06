@@ -13,7 +13,7 @@
 var settings = {
   zipCode: '08226',  // Ocean City, NJ (default - has nearby NOAA tide station)
   stationId: '',      // Optional NOAA station override
-  displayMode: 0      // 0 = minimal, 1 = detailed
+  displayMode: 1      // 0=low, 1=med, 2=high
 };
 
 // ============================================================================
@@ -479,32 +479,14 @@ Pebble.addEventListener('webviewclosed', function (e) {
       if (config.stationId !== undefined) settings.stationId = config.stationId;
       if (config.displayMode !== undefined) settings.displayMode = parseInt(config.displayMode);
       saveSettings();
-      console.log('Settings updated, zip: ' + settings.zipCode);
+      console.log('Settings updated: zip=' + settings.zipCode + ' mode=' + settings.displayMode);
 
-      // Check if dev mode values were sent
-      if (config.devMode) {
-        console.log('Dev mode: sending manual test values');
-        var devMessage = {
-          'TIDE_HEIGHT': config.tideHeight,
-          'TIDE_STATE': config.tideState,
-          'SUNRISE_HOUR': config.sunriseHour,
-          'SUNRISE_MIN': config.sunriseMin,
-          'SUNSET_HOUR': config.sunsetHour,
-          'SUNSET_MIN': config.sunsetMin,
-          'NEXT_HIGH_HOUR': config.nextHighHour,
-          'NEXT_HIGH_MIN': config.nextHighMin,
-          'NEXT_LOW_HOUR': config.nextLowHour,
-          'NEXT_LOW_MIN': config.nextLowMin,
-          'DISPLAY_MODE': settings.displayMode
-        };
-        Pebble.sendAppMessage(devMessage,
-          function () { console.log('Dev values sent to watch'); },
-          function (e) { console.log('Error sending dev values'); }
-        );
-      } else {
-        // Normal: fetch new data with updated location
-        fetchAllData();
-      }
+      // Send display mode immediately, then fetch fresh data
+      Pebble.sendAppMessage({'DISPLAY_MODE': settings.displayMode},
+        function() { console.log('Display mode sent'); },
+        function() { console.log('Display mode send failed'); }
+      );
+      fetchAllData();
     } catch (err) {
       console.log('Config parse error: ' + err);
     }

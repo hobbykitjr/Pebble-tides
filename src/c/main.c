@@ -382,7 +382,7 @@ static void draw_wx(GContext *ctx, int x, int y, int code) {
 // DRAW: OCEAN (solid blue + white foam waves)
 // ============================================================================
 static void draw_ocean(GContext *ctx, GRect b) {
-  int tb=(b.size.h*TIME_ROW_Y_PCT)/100+35;
+  int tb=PLANE_Y+20+44+22;  // Below time+date (matches HUD positioning)
   int sy=sand_y(b.size.h);
   if(sy<=tb) return;
 
@@ -400,22 +400,28 @@ static void draw_wave(GContext *ctx, const Wave *w, GRect b) {
   int16_t yo=(sin_lookup(w->phase)*w->amp)/TRIG_MAX_RATIO;
   int dy=wy+yo;
 
-  // White foam/crest lines on solid blue
+  // Broken wave segments — pixel art style with gaps
   #ifdef PBL_COLOR
   graphics_context_set_fill_color(ctx,C_FOAM);
   #else
   graphics_context_set_fill_color(ctx,GColorWhite);
   #endif
   int step=4;
+  int seg_id=0;
   for(int x=0;x<b.size.w;x+=step){
     int32_t a=(w->phase+(x*TRIG_MAX_ANGLE/b.size.w))%TRIG_MAX_ANGLE;
-    int16_t wb=(sin_lookup(a)*2)/TRIG_MAX_RATIO;
-    graphics_fill_rect(ctx,GRect(x,dy+wb,step,3),0,GCornerNone);
+    int16_t wb=(sin_lookup(a)*3)/TRIG_MAX_RATIO;
+    // Skip some segments for broken/natural look (vary by wave + position)
+    seg_id++;
+    int hash = (w->base_y * 7 + x * 13 + (w->phase/1000)) % 10;
+    if(hash < 3) continue;  // ~30% gaps
+    int h = 2 + (hash % 2);  // Vary height 2-3px
+    graphics_fill_rect(ctx,GRect(x,dy+wb,step,h),0,GCornerNone);
   }
   // Extra white foam on front wave
   if(w==&s_waves[0]) {
     graphics_context_set_fill_color(ctx,GColorWhite);
-    for(int x=2;x<b.size.w;x+=step*2){
+    for(int x=2;x<b.size.w;x+=step*3){
       int32_t a=(w->phase+(x*TRIG_MAX_ANGLE/b.size.w))%TRIG_MAX_ANGLE;
       int16_t wb=(sin_lookup(a)*2)/TRIG_MAX_RATIO;
       graphics_fill_rect(ctx,GRect(x,dy+wb-1,step-1,2),0,GCornerNone);
@@ -445,10 +451,10 @@ static void draw_sand(GContext *ctx, GRect b) {
 // DRAW: BATTERY SHELLS
 // ============================================================================
 static void draw_shells(GContext *ctx, GRect b) {
-  int sy=sand_y(b.size.h);
-  int shy=sy+8; if(shy+10>b.size.h) return;
+  // Fixed position near bottom-left (always visible regardless of tide)
+  int shy=b.size.h-38;
   int num=(s_bat+19)/20;
-  int bx=40;
+  int bx=45;  // Inset for round bezel
   #ifdef PBL_COLOR
   graphics_context_set_fill_color(ctx,C_SHELL);
   #else
@@ -473,9 +479,8 @@ static void draw_shells(GContext *ctx, GRect b) {
 // ============================================================================
 static void draw_bt(GContext *ctx, GRect b) {
   if(s_bt) return;
-  int sy=sand_y(b.size.h);
-  int sx=b.size.w-55, py=sy+2;
-  if(py+20>b.size.h) return;
+  // Fixed position near bottom-right (always visible)
+  int sx=b.size.w-60, py=b.size.h-38;
   graphics_context_set_fill_color(ctx,C_SIGN_P);
   graphics_fill_rect(ctx,GRect(sx+8,py,3,20),0,GCornerNone);
   graphics_context_set_fill_color(ctx,C_SIGN_B);
@@ -566,23 +571,23 @@ static void draw_hud(GContext *ctx, GRect b) {
   GFont f14=fonts_get_system_font(FONT_KEY_GOTHIC_14);
   GFont f24=fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
 
-  // -- TEMP + WEATHER (all levels) — high, consistent Y --
+  // -- TEMP + WEATHER (all levels) — both at same visual center --
   snprintf(s_tmp,sizeof(s_tmp),"%d°",s_d.temp);
-  int temp_y=38;
+  int temp_y=32;  // Higher up near top
   if(s_d.wx!=WX_CLEAR){
-    // Temp on left of center, icon on right, both vertically centered
+    // Temp text baseline + icon center aligned at same visual midpoint
     txt(ctx,s_tmp,f24,GRect(b.size.w/2-48,temp_y,48,28),GTextAlignmentRight);
-    draw_wx(ctx,b.size.w/2+16,temp_y+14,s_d.wx);
+    draw_wx(ctx,b.size.w/2+16,temp_y+12,s_d.wx);
   } else {
     txt(ctx,s_tmp,f24,GRect(0,temp_y,b.size.w,28),GTextAlignmentCenter);
   }
 
-  // -- TIME --
-  int ty=(b.size.h*TIME_ROW_Y_PCT)/100-24;
+  // -- TIME (just below plane banner area) --
+  int ty=PLANE_Y+20;  // Right below the banner Y
   txt(ctx,s_tbuf,f42,GRect(0,ty,b.size.w,50),GTextAlignmentCenter);
 
   // -- DATE --
-  txt(ctx,s_dbuf,f18,GRect(0,ty+44,b.size.w,22),GTextAlignmentCenter);
+  txt(ctx,s_dbuf,f18,GRect(0,ty+42,b.size.w,22),GTextAlignmentCenter);
 
   // -- SUNRISE/SUNSET at 9 and 3 o'clock (HIGH only) --
   if(s_det>=DETAIL_HIGH) {
