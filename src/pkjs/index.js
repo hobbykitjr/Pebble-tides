@@ -348,7 +348,7 @@ function saveSettings() {
 
 // Clay configuration page
 Pebble.addEventListener('showConfiguration', function () {
-  var clayUrl = 'https://hobbykitjr.github.io/pebble-tides/config/index.html';
+  var clayUrl = 'https://hobbykitjr.github.io/Pebble-tides/config/index.html';
 
   // Append current settings as URL params
   var url = clayUrl + '?zip=' + encodeURIComponent(settings.zipCode) +
