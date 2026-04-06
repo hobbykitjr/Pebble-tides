@@ -27,7 +27,7 @@
 
 // Airplane
 #define PLANE_SPEED       4
-#define PLANE_Y           72   // Fixed Y px — below temp, above time
+#define PLANE_Y           52   // Fixed Y px — below temp, above time
 
 // Detail levels
 #define DETAIL_LOW    0
@@ -382,7 +382,7 @@ static void draw_wx(GContext *ctx, int x, int y, int code) {
 // DRAW: OCEAN (solid blue + white foam waves)
 // ============================================================================
 static void draw_ocean(GContext *ctx, GRect b) {
-  int tb=PLANE_Y+20+44+22;  // Below time+date (matches HUD positioning)
+  int tb=PLANE_Y+16+44+20;  // Below time+date (matches HUD positioning)
   int sy=sand_y(b.size.h);
   if(sy<=tb) return;
 
@@ -400,28 +400,30 @@ static void draw_wave(GContext *ctx, const Wave *w, GRect b) {
   int16_t yo=(sin_lookup(w->phase)*w->amp)/TRIG_MAX_RATIO;
   int dy=wy+yo;
 
-  // Broken wave segments — pixel art style with gaps
+  // Subtle wave lines — slightly lighter blue, broken segments
   #ifdef PBL_COLOR
-  graphics_context_set_fill_color(ctx,C_FOAM);
+  // Use lighter blue for subtle contrast on cobalt ocean
+  graphics_context_set_fill_color(ctx, GColorVividCerulean);
   #else
-  graphics_context_set_fill_color(ctx,GColorWhite);
+  graphics_context_set_fill_color(ctx, GColorWhite);
   #endif
-  int step=4;
-  int seg_id=0;
+  int step=6;  // Wider step = less dense
   for(int x=0;x<b.size.w;x+=step){
     int32_t a=(w->phase+(x*TRIG_MAX_ANGLE/b.size.w))%TRIG_MAX_ANGLE;
-    int16_t wb=(sin_lookup(a)*3)/TRIG_MAX_RATIO;
-    // Skip some segments for broken/natural look (vary by wave + position)
-    seg_id++;
-    int hash = (w->base_y * 7 + x * 13 + (w->phase/1000)) % 10;
-    if(hash < 3) continue;  // ~30% gaps
-    int h = 2 + (hash % 2);  // Vary height 2-3px
-    graphics_fill_rect(ctx,GRect(x,dy+wb,step,h),0,GCornerNone);
+    int16_t wb=(sin_lookup(a)*2)/TRIG_MAX_RATIO;
+    // ~50% gaps for broken natural look
+    int hash = (w->base_y * 7 + x * 11 + (w->phase/800)) % 10;
+    if(hash < 5) continue;
+    graphics_fill_rect(ctx,GRect(x,dy+wb,step-1,2),0,GCornerNone);
   }
-  // Extra white foam on front wave
+  // Thin white foam line on front wave only
   if(w==&s_waves[0]) {
-    graphics_context_set_fill_color(ctx,GColorWhite);
-    for(int x=2;x<b.size.w;x+=step*3){
+    #ifdef PBL_COLOR
+    graphics_context_set_fill_color(ctx, C_FOAM);
+    #else
+    graphics_context_set_fill_color(ctx, GColorWhite);
+    #endif
+    for(int x=4;x<b.size.w;x+=step*2){
       int32_t a=(w->phase+(x*TRIG_MAX_ANGLE/b.size.w))%TRIG_MAX_ANGLE;
       int16_t wb=(sin_lookup(a)*2)/TRIG_MAX_RATIO;
       graphics_fill_rect(ctx,GRect(x,dy+wb-1,step-1,2),0,GCornerNone);
@@ -451,8 +453,8 @@ static void draw_sand(GContext *ctx, GRect b) {
 // DRAW: BATTERY SHELLS
 // ============================================================================
 static void draw_shells(GContext *ctx, GRect b) {
-  // Fixed position near bottom-left (always visible regardless of tide)
-  int shy=b.size.h-38;
+  // Fixed position left side, above tide text area
+  int shy=b.size.h-58;
   int num=(s_bat+19)/20;
   int bx=45;  // Inset for round bezel
   #ifdef PBL_COLOR
@@ -479,8 +481,8 @@ static void draw_shells(GContext *ctx, GRect b) {
 // ============================================================================
 static void draw_bt(GContext *ctx, GRect b) {
   if(s_bt) return;
-  // Fixed position near bottom-right (always visible)
-  int sx=b.size.w-60, py=b.size.h-38;
+  // Fixed position right side, above tide text area
+  int sx=b.size.w-65, py=b.size.h-58;
   graphics_context_set_fill_color(ctx,C_SIGN_P);
   graphics_fill_rect(ctx,GRect(sx+8,py,3,20),0,GCornerNone);
   graphics_context_set_fill_color(ctx,C_SIGN_B);
@@ -571,19 +573,20 @@ static void draw_hud(GContext *ctx, GRect b) {
   GFont f14=fonts_get_system_font(FONT_KEY_GOTHIC_14);
   GFont f24=fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
 
-  // -- TEMP + WEATHER (all levels) — both at same visual center --
+  // -- TEMP + WEATHER (all levels) --
   snprintf(s_tmp,sizeof(s_tmp),"%d°",s_d.temp);
-  int temp_y=32;  // Higher up near top
+  int temp_y=26;  // Near top of round visible area
   if(s_d.wx!=WX_CLEAR){
-    // Temp text baseline + icon center aligned at same visual midpoint
+    // Icon draws centered at its y param — align with temp text visual center
+    // GOTHIC_24_BOLD renders ~20px tall, visual center at temp_y+10
     txt(ctx,s_tmp,f24,GRect(b.size.w/2-48,temp_y,48,28),GTextAlignmentRight);
-    draw_wx(ctx,b.size.w/2+16,temp_y+12,s_d.wx);
+    draw_wx(ctx,b.size.w/2+16,temp_y+10,s_d.wx);  // Icon center = text center
   } else {
     txt(ctx,s_tmp,f24,GRect(0,temp_y,b.size.w,28),GTextAlignmentCenter);
   }
 
-  // -- TIME (just below plane banner area) --
-  int ty=PLANE_Y+20;  // Right below the banner Y
+  // -- TIME (right below plane banner) --
+  int ty=PLANE_Y+16;
   txt(ctx,s_tbuf,f42,GRect(0,ty,b.size.w,50),GTextAlignmentCenter);
 
   // -- DATE --
@@ -630,13 +633,14 @@ static void draw_hud(GContext *ctx, GRect b) {
       snprintf(s_t2,sizeof(s_t2),"%s %d:%02d",fl,fh,fm);
     }
 
-    int iy=sy+6; if(iy+34>b.size.h) iy=b.size.h-36;
+    // Fixed position at bottom of screen (always visible)
+    int iy=b.size.h-52;
 
     if(s_det==DETAIL_HIGH && s_d.town[0]){
       graphics_context_set_text_color(ctx,C_INFO);
       graphics_draw_text(ctx,s_d.town,f14,GRect(0,iy,b.size.w,16),
         GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
-      iy+=14;
+      iy+=13;
     }
     graphics_context_set_text_color(ctx,C_SHAD);
     graphics_draw_text(ctx,s_t1,f14,GRect(1,iy+1,b.size.w,18),
@@ -646,7 +650,7 @@ static void draw_hud(GContext *ctx, GRect b) {
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
     if(s_t2[0]){
       graphics_context_set_text_color(ctx,C_INFO);
-      graphics_draw_text(ctx,s_t2,f14,GRect(0,iy+14,b.size.w,18),
+      graphics_draw_text(ctx,s_t2,f14,GRect(0,iy+13,b.size.w,18),
         GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
     }
   }
@@ -757,7 +761,12 @@ static void inbox_cb(DictionaryIterator *it, void *c){
   #if DEV_MODE
   if(s_pre>=0){
     t=dict_find(it,MESSAGE_KEY_DISPLAY_MODE);
-    if(t){s_det=(int)t->value->int32; persist_write_int(P_DETAIL,s_det);}
+    if(t){
+      s_det=(int)t->value->int32;
+      persist_write_int(P_DETAIL,s_det);
+      if(s_canvas) layer_mark_dirty(s_canvas);
+      APP_LOG(APP_LOG_LEVEL_INFO,"Detail set to %d",s_det);
+    }
     return;
   }
   #endif
