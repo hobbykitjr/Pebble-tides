@@ -18,7 +18,7 @@
 #define TIME_ROW_Y_PCT    42
 #define SAND_LOW_Y_PCT    75
 #define SAND_HIGH_Y_PCT   88
-#define SAND_MIN_Y        200
+#define SAND_MIN_Y        235  // Don't clip into bottom bezel
 
 // Sun/moon arc
 #define BODY_RADIUS       10
