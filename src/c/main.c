@@ -16,8 +16,8 @@
 
 // Layout (260px round)
 #define TIME_ROW_Y_PCT    42
-#define SAND_LOW_Y_PCT    75
-#define SAND_HIGH_Y_PCT   88
+#define SAND_LOW_Y_PCT    65   // More beach at low tide
+#define SAND_HIGH_Y_PCT   85   // Ocean covers more at high tide
 #define SAND_MIN_Y        235  // Don't clip into bottom bezel
 
 // Sun/moon arc
@@ -27,7 +27,7 @@
 
 // Airplane
 #define PLANE_SPEED       4
-#define PLANE_Y           56   // Fixed Y px — below temp, above time
+#define PLANE_Y           58   // Fixed Y px — below temp, above time
 
 // Detail levels
 #define DETAIL_LOW    0
@@ -382,53 +382,78 @@ static void draw_wx(GContext *ctx, int x, int y, int code) {
 // DRAW: OCEAN (solid blue + white foam waves)
 // ============================================================================
 static void draw_ocean(GContext *ctx, GRect b) {
-  int tb=PLANE_Y+16+44+20;  // Below time+date (matches HUD positioning)
+  int tb=PLANE_Y+18+44+20;  // Below time+date
   int sy=sand_y(b.size.h);
   if(sy<=tb) return;
+  int oh=sy-tb;
 
-  // Solid ocean color
+  // Gradient: dark blue at top → medium → light/teal near shore
+  #ifdef PBL_COLOR
+  int band=oh/4; if(band<1) band=1;
+  // Dark blue at horizon
+  graphics_context_set_fill_color(ctx,GColorOxfordBlue);
+  graphics_fill_rect(ctx,GRect(0,tb,b.size.w,band),0,GCornerNone);
+  // Medium blue
   graphics_context_set_fill_color(ctx,C_OCEAN);
-  graphics_fill_rect(ctx,GRect(0,tb,b.size.w,sy-tb),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(0,tb+band,b.size.w,band),0,GCornerNone);
+  // Lighter blue
+  graphics_context_set_fill_color(ctx,GColorBlue);
+  graphics_fill_rect(ctx,GRect(0,tb+band*2,b.size.w,band),0,GCornerNone);
+  // Teal near shore
+  graphics_context_set_fill_color(ctx,GColorTiffanyBlue);
+  graphics_fill_rect(ctx,GRect(0,tb+band*3,b.size.w,oh-band*3),0,GCornerNone);
+  #else
+  graphics_context_set_fill_color(ctx,GColorBlack);
+  graphics_fill_rect(ctx,GRect(0,tb,b.size.w,oh),0,GCornerNone);
+  #endif
 }
 
-static void draw_wave(GContext *ctx, const Wave *w, GRect b) {
+// Waves: only white foam at the shoreline, not scattered through ocean
+static void draw_waves(GContext *ctx, GRect b) {
   int sy=sand_y(b.size.h);
-  int shift=(s_d.tide_pct*(sy-(b.size.h*SAND_LOW_Y_PCT)/100));
-  int wy=w->base_y+shift/100;
-  if(wy>sy) return;
+  int step=4;
 
-  int16_t yo=(sin_lookup(w->phase)*w->amp)/TRIG_MAX_RATIO;
-  int dy=wy+yo;
+  // Foam line 1: right at shoreline (front wave)
+  int16_t yo1=(sin_lookup(s_waves[0].phase)*s_waves[0].amp)/TRIG_MAX_RATIO;
+  int foam1_y=sy-3+yo1;
 
-  // Subtle wave lines — slightly lighter blue, broken segments
-  #ifdef PBL_COLOR
-  // Use lighter blue for subtle contrast on cobalt ocean
-  graphics_context_set_fill_color(ctx, GColorVividCerulean);
-  #else
-  graphics_context_set_fill_color(ctx, GColorWhite);
-  #endif
-  int step=6;  // Wider step = less dense
+  graphics_context_set_fill_color(ctx,GColorWhite);
   for(int x=0;x<b.size.w;x+=step){
-    int32_t a=(w->phase+(x*TRIG_MAX_ANGLE/b.size.w))%TRIG_MAX_ANGLE;
+    int32_t a=(s_waves[0].phase+(x*TRIG_MAX_ANGLE*2/b.size.w))%TRIG_MAX_ANGLE;
+    int16_t wb=(sin_lookup(a)*3)/TRIG_MAX_RATIO;
+    graphics_fill_rect(ctx,GRect(x,foam1_y+wb,step,3),0,GCornerNone);
+  }
+
+  // Foam line 2: a few px above shoreline (second wave)
+  int16_t yo2=(sin_lookup(s_waves[1].phase)*s_waves[1].amp)/TRIG_MAX_RATIO;
+  int foam2_y=sy-12+yo2;
+
+  #ifdef PBL_COLOR
+  graphics_context_set_fill_color(ctx,C_FOAM);
+  #endif
+  for(int x=0;x<b.size.w;x+=step){
+    int32_t a=(s_waves[1].phase+(x*TRIG_MAX_ANGLE*3/b.size.w))%TRIG_MAX_ANGLE;
     int16_t wb=(sin_lookup(a)*2)/TRIG_MAX_RATIO;
-    // ~50% gaps for broken natural look
-    int hash = (w->base_y * 7 + x * 11 + (w->phase/800)) % 10;
-    if(hash < 5) continue;
-    graphics_fill_rect(ctx,GRect(x,dy+wb,step-1,2),0,GCornerNone);
+    // Broken segments — not a solid line
+    int hash=(x*13+s_waves[1].phase/600)%10;
+    if(hash<4) continue;
+    graphics_fill_rect(ctx,GRect(x,foam2_y+wb,step,2),0,GCornerNone);
   }
-  // Thin white foam line on front wave only
-  if(w==&s_waves[0]) {
-    #ifdef PBL_COLOR
-    graphics_context_set_fill_color(ctx, C_FOAM);
-    #else
-    graphics_context_set_fill_color(ctx, GColorWhite);
-    #endif
-    for(int x=4;x<b.size.w;x+=step*2){
-      int32_t a=(w->phase+(x*TRIG_MAX_ANGLE/b.size.w))%TRIG_MAX_ANGLE;
-      int16_t wb=(sin_lookup(a)*2)/TRIG_MAX_RATIO;
-      graphics_fill_rect(ctx,GRect(x,dy+wb-1,step-1,2),0,GCornerNone);
-    }
+
+  // One subtle lighter line in mid-ocean for depth
+  int mid_ocean=(sy+PLANE_Y+80)/2;
+  #ifdef PBL_COLOR
+  graphics_context_set_fill_color(ctx,GColorPictonBlue);
+  int16_t yo3=(sin_lookup(s_waves[2].phase)*2)/TRIG_MAX_RATIO;
+  for(int x=0;x<b.size.w;x+=step*2){
+    int32_t a=(s_waves[2].phase+(x*TRIG_MAX_ANGLE/b.size.w))%TRIG_MAX_ANGLE;
+    int16_t wb=(sin_lookup(a)*1)/TRIG_MAX_RATIO;
+    int hash=(x*7+s_waves[2].phase/500)%10;
+    if(hash<6) continue;
+    graphics_fill_rect(ctx,GRect(x,mid_ocean+yo3+wb,step,1),0,GCornerNone);
   }
+  #endif
+
 }
 
 // ============================================================================
@@ -519,24 +544,31 @@ static void draw_plane(GContext *ctx, GRect b) {
   if(bx<2) bx=2;
   int bw=px-bx-4;
 
+  // Banner hangs below plane
+  int by=py+8;  // Banner a few px below plane Y
   if(bw>10) {
     #ifdef PBL_COLOR
     graphics_context_set_fill_color(ctx,GColorRed);
     #else
     graphics_context_set_fill_color(ctx,C_SHAD);
     #endif
-    graphics_fill_rect(ctx,GRect(bx,py-2,bw,14),0,GCornerNone);
+    graphics_fill_rect(ctx,GRect(bx,by,bw,14),0,GCornerNone);
     // Pennant tail
-    graphics_fill_rect(ctx,GRect(bx-3,py,3,10),0,GCornerNone);
+    graphics_fill_rect(ctx,GRect(bx-3,by+2,3,10),0,GCornerNone);
 
     GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
     graphics_context_set_text_color(ctx,C_TEXT);
     const char *msg=s_refreshing?"Updating...":"Updated!";
-    graphics_draw_text(ctx,msg,f,GRect(bx+2,py-3,bw-4,16),
+    graphics_draw_text(ctx,msg,f,GRect(bx+2,by-1,bw-4,16),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
+
+    // String from plane to banner
+    graphics_context_set_stroke_color(ctx,C_PLANE);
+    graphics_context_set_stroke_width(ctx,1);
+    graphics_draw_line(ctx,GPoint(px,py+5),GPoint(bx+bw-2,by));
   }
 
-  // Plane body (same Y as banner center)
+  // Plane body (above banner)
   graphics_context_set_fill_color(ctx,C_PLANE);
   graphics_fill_rect(ctx,GRect(px,py,14,5),0,GCornerNone);
   // Wings
@@ -544,12 +576,6 @@ static void draw_plane(GContext *ctx, GRect b) {
   // Tail
   graphics_fill_rect(ctx,GRect(px-3,py-3,5,4),0,GCornerNone);
 
-  // String
-  if(bw>10){
-    graphics_context_set_stroke_color(ctx,C_PLANE);
-    graphics_context_set_stroke_width(ctx,1);
-    graphics_draw_line(ctx,GPoint(px,py+2),GPoint(px-4,py+2));
-  }
 }
 
 // ============================================================================
@@ -663,7 +689,7 @@ static void canvas_proc(Layer *l, GContext *ctx) {
   GRect b=layer_get_bounds(l);
   draw_sky(ctx,b); draw_sun(ctx,b); draw_moon(ctx,b);
   draw_ocean(ctx,b);
-  for(int i=NUM_WAVES-1;i>=0;i--) draw_wave(ctx,&s_waves[i],b);
+  draw_waves(ctx,b);
   draw_sand(ctx,b); draw_shells(ctx,b); draw_bt(ctx,b);
   draw_plane(ctx,b); draw_hud(ctx,b);
 }
