@@ -829,6 +829,21 @@ static void tap_handler(AccelAxisType axis, int32_t direction) {
 static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
   Tuple *t;
 
+  #if DEV_MODE
+  // If a test preset is active, ignore live data (don't overwrite preset)
+  // But still accept display mode changes
+  if (s_test_preset >= 0) {
+    t = dict_find(iterator, MESSAGE_KEY_DISPLAY_MODE);
+    if (t) {
+      s_display_mode = (int)t->value->int32;
+      persist_write_int(PERSIST_DISPLAY_MODE, s_display_mode);
+      if (s_canvas_layer) layer_mark_dirty(s_canvas_layer);
+    }
+    APP_LOG(APP_LOG_LEVEL_INFO, "DEV: ignoring live data (preset %d active)", s_test_preset);
+    return;
+  }
+  #endif
+
   t = dict_find(iterator, MESSAGE_KEY_TIDE_HEIGHT);
   if (t) s_tide.tide_height_pct = (int)t->value->int32;
 
