@@ -606,10 +606,16 @@ static void draw_bt(GContext *ctx, GRect b) {
   if(s_bt) return;
   // Fixed position right side, above tide text area
   int sx=b.size.w-65, py=b.size.h-48;
+  // Post
   graphics_context_set_fill_color(ctx,C_SIGN_P);
   graphics_fill_rect(ctx,GRect(sx+8,py,3,20),0,GCornerNone);
-  graphics_context_set_fill_color(ctx,C_SIGN_B);
+  // Sign board — white background for contrast
+  graphics_context_set_fill_color(ctx,GColorWhite);
   graphics_fill_rect(ctx,GRect(sx,py,20,14),0,GCornerNone);
+  // Board outline
+  graphics_context_set_stroke_color(ctx,C_SIGN_P);
+  graphics_context_set_stroke_width(ctx,1);
+  graphics_draw_rect(ctx,GRect(sx,py,20,14));
   #ifdef PBL_COLOR
   graphics_context_set_stroke_color(ctx,GColorBlue);
   #else
@@ -815,6 +821,7 @@ static void upd_time(void){
 // ANIMATION
 // ============================================================================
 static void anim_cb(void *data){
+  s_timer=NULL;  // Timer has fired, clear the handle
   upd_waves();
   s_anim_ms+=WAVE_ANIM_INTERVAL;
   if(s_plane){s_px+=PLANE_SPEED; if(s_px>300){s_plane=false;s_refreshing=false;}}
@@ -825,11 +832,15 @@ static void anim_cb(void *data){
   bool stop=(s_anim_ms>=WAVE_ANIM_DURATION && !s_plane);
   #endif
   if(stop||(s_bat<=LOW_BATTERY_THRESHOLD&&!s_plane)){
-    s_anim=false;s_timer=NULL;return;}
+    s_anim=false; return;
+  }
   s_timer=app_timer_register(WAVE_ANIM_INTERVAL,anim_cb,NULL);
+  if(!s_timer) s_anim=false;  // Registration failed, allow restart
 }
 static void start_anim(void){
-  if(s_anim) return;
+  // Allow restart if timer died unexpectedly
+  if(s_anim && s_timer) return;
+  if(s_timer){app_timer_cancel(s_timer);s_timer=NULL;}
   s_anim=true; s_anim_ms=0;
   s_timer=app_timer_register(WAVE_ANIM_INTERVAL,anim_cb,NULL);
 }
@@ -839,7 +850,12 @@ static void start_anim(void){
 // ============================================================================
 static void tick_cb(struct tm *t, TimeUnits u){
   #if DEV_MODE
-  if(s_pre>=0){if(s_canvas)layer_mark_dirty(s_canvas);return;}
+  if(s_pre>=0){
+    // Recovery: if animation died, restart it
+    if(!s_anim || !s_timer) start_anim();
+    else if(s_canvas) layer_mark_dirty(s_canvas);
+    return;
+  }
   #endif
   upd_time();
   if(t->tm_min%5==0) start_anim();
