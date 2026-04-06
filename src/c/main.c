@@ -25,14 +25,14 @@
 #define SAND_HIGH_Y_PCT   88   // Sand top at HIGH tide (ocean covers more)
 #define SAND_MIN_Y        200  // Sand never goes below this (absolute px)
 
-// Sun/moon arc (invisible path)
+// Sun/moon arc (invisible path) - hugs the bezel
 #define BODY_RADIUS       10
-#define ARC_TOP_Y_PCT     12
-#define ARC_BOT_Y_PCT     42   // At time row level (horizon)
+#define ARC_TOP_Y_PCT     5    // Very top, near bezel
+#define ARC_BOT_Y_PCT     40   // Drops to just above time row
 
 // Airplane animation
 #define PLANE_SPEED       4    // px per frame
-#define PLANE_Y_PCT       22   // Y position in sky
+#define PLANE_Y_PCT       30   // Y position in sky (below sun arc)
 
 // Detail levels
 #define DETAIL_LOW    0
@@ -217,7 +217,13 @@ static void apply_preset(int i) {
   s_data.temperature=p->temp; s_data.weather_code=p->wx;
   snprintf(s_data.town, sizeof(s_data.town), "Ocean City, NJ");
   s_data.valid=true;
-  snprintf(s_time_buf,sizeof(s_time_buf),"%d:%02d",p->h,p->m);
+  if (clock_is_24h_style()) {
+    snprintf(s_time_buf,sizeof(s_time_buf),"%d:%02d",p->h,p->m);
+  } else {
+    int h12 = p->h % 12;
+    if (h12 == 0) h12 = 12;
+    snprintf(s_time_buf,sizeof(s_time_buf),"%d:%02d",h12,p->m);
+  }
   snprintf(s_date_buf,sizeof(s_date_buf),"DEV:%s",s_preset_names[i]);
 }
 #endif
@@ -307,7 +313,8 @@ static void arc_pos(GRect b, int progress, int *ox, int *oy) {
   int top = (b.size.h * ARC_TOP_Y_PCT) / 100;
   int bot = (b.size.h * ARC_BOT_Y_PCT) / 100;
   int ah = bot - top;
-  *ox = b.size.w*20/100 + (b.size.w*60/100*progress)/100;
+  // Wide X range: 10% to 90% — sun/moon hugs the round bezel
+  *ox = b.size.w*10/100 + (b.size.w*80/100*progress)/100;
   int c = progress - 50;
   *oy = bot - (ah * (2500 - c*c)) / 2500;
 }
@@ -343,13 +350,32 @@ static void draw_sky(GContext *ctx, GRect b) {
       if(s[i][1]<sy-10) graphics_draw_pixel(ctx,GPoint(s[i][0],s[i][1]));
     #endif
   } else {
-    GColor upper = (twi>50)?C_SKY_DAWN:C_SKY_DAY;
-    GColor lower = (twi>30)?C_SKY_DUSK:C_SKY_LOW;
-    int mid = sy*2/3;
-    graphics_context_set_fill_color(ctx, upper);
-    graphics_fill_rect(ctx, GRect(0,0,b.size.w,mid), 0, GCornerNone);
-    graphics_context_set_fill_color(ctx, lower);
-    graphics_fill_rect(ctx, GRect(0,mid,b.size.w,sy-mid), 0, GCornerNone);
+    #ifdef PBL_COLOR
+    if (twi > 20) {
+      // Dawn/dusk: 4-band gradient (dark blue -> pink -> orange -> yellow at horizon)
+      int h4 = sy / 4;
+      graphics_context_set_fill_color(ctx, GColorCobaltBlue);
+      graphics_fill_rect(ctx, GRect(0,0,b.size.w,h4), 0, GCornerNone);
+      graphics_context_set_fill_color(ctx, C_SKY_DAWN);
+      graphics_fill_rect(ctx, GRect(0,h4,b.size.w,h4), 0, GCornerNone);
+      graphics_context_set_fill_color(ctx, C_SKY_DUSK);
+      graphics_fill_rect(ctx, GRect(0,h4*2,b.size.w,h4), 0, GCornerNone);
+      graphics_context_set_fill_color(ctx, GColorRajah);
+      graphics_fill_rect(ctx, GRect(0,h4*3,b.size.w,sy-h4*3), 0, GCornerNone);
+    } else {
+      // Normal day: 3-band gradient
+      int h3 = sy / 3;
+      graphics_context_set_fill_color(ctx, C_SKY_DAY);
+      graphics_fill_rect(ctx, GRect(0,0,b.size.w,h3), 0, GCornerNone);
+      graphics_context_set_fill_color(ctx, C_SKY_LOW);
+      graphics_fill_rect(ctx, GRect(0,h3,b.size.w,h3), 0, GCornerNone);
+      graphics_context_set_fill_color(ctx, GColorCeleste);
+      graphics_fill_rect(ctx, GRect(0,h3*2,b.size.w,sy-h3*2), 0, GCornerNone);
+    }
+    #else
+    graphics_context_set_fill_color(ctx, C_SKY_DAY);
+    graphics_fill_rect(ctx, GRect(0,0,b.size.w,sy), 0, GCornerNone);
+    #endif
   }
 }
 
@@ -502,13 +528,17 @@ static void draw_ocean(GContext *ctx, GRect b) {
   int ocean_h = sy - time_bottom;
   if (ocean_h <= 0) return;
 
+  // Smooth 4-band ocean gradient
   #ifdef PBL_COLOR
+  int h4 = ocean_h / 4;
+  graphics_context_set_fill_color(ctx, GColorTiffanyBlue);
+  graphics_fill_rect(ctx,GRect(0,time_bottom,b.size.w,h4),0,GCornerNone);
   graphics_context_set_fill_color(ctx, C_OCEAN_LIGHT);
-  graphics_fill_rect(ctx,GRect(0,time_bottom,b.size.w,ocean_h/3),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(0,time_bottom+h4,b.size.w,h4),0,GCornerNone);
   graphics_context_set_fill_color(ctx, C_OCEAN_MID);
-  graphics_fill_rect(ctx,GRect(0,time_bottom+ocean_h/3,b.size.w,ocean_h/3),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(0,time_bottom+h4*2,b.size.w,h4),0,GCornerNone);
   graphics_context_set_fill_color(ctx, C_OCEAN_DEEP);
-  graphics_fill_rect(ctx,GRect(0,time_bottom+ocean_h*2/3,b.size.w,ocean_h/3+2),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(0,time_bottom+h4*3,b.size.w,ocean_h-h4*3),0,GCornerNone);
   #else
   graphics_context_set_fill_color(ctx, GColorBlack);
   graphics_fill_rect(ctx,GRect(0,time_bottom,b.size.w,ocean_h),0,GCornerNone);
@@ -523,18 +553,21 @@ static void draw_wave(GContext *ctx, const Wave *w, GRect b) {
 
   int16_t y_osc = (sin_lookup(w->phase) * w->amplitude) / TRIG_MAX_RATIO;
   int dy = wy + y_osc;
+
+  // Draw wave as filled band from wave crest down to next wave area
   graphics_context_set_fill_color(ctx, w->color);
   int step = 4;
   for (int x=0; x<b.size.w; x+=step) {
     int32_t a = (w->phase + (x*TRIG_MAX_ANGLE/b.size.w)) % TRIG_MAX_ANGLE;
     int16_t wobble = (sin_lookup(a)*2)/TRIG_MAX_RATIO;
-    graphics_fill_rect(ctx,GRect(x,dy+wobble,step,5),0,GCornerNone);
+    // Fill from wave line down 8px for thicker, filled-in look
+    graphics_fill_rect(ctx,GRect(x,dy+wobble,step,8),0,GCornerNone);
   }
   // Foam on front wave
   #ifdef PBL_COLOR
   if (w->color.argb == C_OCEAN_FOAM.argb) {
     graphics_context_set_fill_color(ctx, GColorWhite);
-    for(int x=0;x<b.size.w;x+=step*3)
+    for(int x=0;x<b.size.w;x+=step*2)
       graphics_fill_rect(ctx,GRect(x,dy-1,step,2),0,GCornerNone);
   }
   #endif
@@ -645,31 +678,42 @@ static void draw_airplane(GContext *ctx, GRect b) {
 
   // Plane body
   graphics_context_set_fill_color(ctx, C_PLANE);
-  graphics_fill_rect(ctx, GRect(px, py, 12, 4), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(px, py, 14, 4), 0, GCornerNone);
   // Wings
-  graphics_fill_rect(ctx, GRect(px+3, py-3, 6, 10), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(px+4, py-4, 6, 12), 0, GCornerNone);
   // Tail
-  graphics_fill_rect(ctx, GRect(px-2, py-2, 4, 3), 0, GCornerNone);
+  graphics_fill_rect(ctx, GRect(px-3, py-3, 5, 4), 0, GCornerNone);
 
-  // Banner trailing behind plane
+  // Long red banner trailing behind plane
   if (px > 10) {
-    graphics_context_set_fill_color(ctx, C_BANNER);
-    int bx = px - 30;
-    if (bx < 5) bx = 5;
-    graphics_fill_rect(ctx, GRect(bx, py+5, px-bx-2, 10), 0, GCornerNone);
+    int banner_len = 70;  // Fixed banner length
+    int bx = px - banner_len;
+    if (bx < 2) bx = 2;
+    int bw = px - bx - 4;
+    if (bw < 10) bw = 10;
 
-    // Banner text
+    // Red banner background
+    #ifdef PBL_COLOR
+    graphics_context_set_fill_color(ctx, GColorRed);
+    #else
+    graphics_context_set_fill_color(ctx, C_BANNER);
+    #endif
+    graphics_fill_rect(ctx, GRect(bx, py+6, bw, 14), 0, GCornerNone);
+    // Banner edge triangle effect
+    graphics_fill_rect(ctx, GRect(bx-2, py+8, 2, 10), 0, GCornerNone);
+
+    // Banner text (white on red)
     GFont tiny = fonts_get_system_font(FONT_KEY_GOTHIC_14);
-    graphics_context_set_text_color(ctx, C_TEXT_SHAD);
+    graphics_context_set_text_color(ctx, C_TEXT);
     const char *msg = s_data_refreshing ? "Updating..." : "Updated!";
     graphics_draw_text(ctx, msg, tiny,
-      GRect(bx+2, py+3, px-bx-6, 14),
+      GRect(bx+2, py+5, bw-4, 16),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 
-    // Banner string to plane
+    // String from plane to banner
     graphics_context_set_stroke_color(ctx, C_PLANE);
     graphics_context_set_stroke_width(ctx, 1);
-    graphics_draw_line(ctx, GPoint(px, py+4), GPoint(px-2, py+5));
+    graphics_draw_line(ctx, GPoint(px, py+4), GPoint(px-4, py+6));
   }
 }
 
@@ -694,12 +738,12 @@ static void draw_hud(GContext *ctx, GRect b) {
   GFont f14 = fonts_get_system_font(FONT_KEY_GOTHIC_14);
   GFont f24 = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
 
-  // -- TEMP + WEATHER (all levels) --
+  // -- TEMP + WEATHER centered below sun arc area --
   snprintf(s_temp_buf, sizeof(s_temp_buf), "%d°", s_data.temperature);
-  int temp_y = 42;
+  int temp_y = 55;  // Lower, below where sun travels
   if (s_data.weather_code != WX_CLEAR) {
-    txt(ctx, s_temp_buf, f24, GRect(b.size.w/2-50, temp_y, 50, 28), GTextAlignmentRight);
-    draw_wx(ctx, b.size.w/2+14, temp_y+12, s_data.weather_code);
+    txt(ctx, s_temp_buf, f24, GRect(b.size.w/2-48, temp_y, 48, 28), GTextAlignmentRight);
+    draw_wx(ctx, b.size.w/2+16, temp_y+12, s_data.weather_code);
   } else {
     txt(ctx, s_temp_buf, f24, GRect(0, temp_y, b.size.w, 28), GTextAlignmentCenter);
   }
@@ -712,16 +756,18 @@ static void draw_hud(GContext *ctx, GRect b) {
   txt(ctx, s_date_buf, f18, GRect(0,time_y+44,b.size.w,22), GTextAlignmentCenter);
 
   // -- SUNRISE/SUNSET (HIGH detail only) --
+  // Positioned close to horizon line and pushed toward edges
   if (s_detail >= DETAIL_HIGH) {
     snprintf(s_sr_buf,sizeof(s_sr_buf),"%d:%02d",s_data.sunrise_h,s_data.sunrise_m);
     snprintf(s_ss_buf,sizeof(s_ss_buf),"%d:%02d",s_data.sunset_h,s_data.sunset_m);
-    int sun_y = time_y + 14;
-    // Labels
-    txt(ctx, "Sunrise", f14, GRect(35,sun_y-14,55,16), GTextAlignmentLeft);
-    txt(ctx, "Sunset", f14, GRect(b.size.w-90,sun_y-14,55,16), GTextAlignmentRight);
-    // Times
-    txt(ctx, s_sr_buf, f14, GRect(35,sun_y,50,18), GTextAlignmentLeft);
-    txt(ctx, s_ss_buf, f14, GRect(b.size.w-85,sun_y,50,18), GTextAlignmentRight);
+    int sun_label_y = time_y + 6;   // Aligned with time row
+    int sun_time_y = time_y + 20;
+    // Labels close to bezel edge
+    txt(ctx, "Sunrise", f14, GRect(22,sun_label_y,60,16), GTextAlignmentLeft);
+    txt(ctx, "Sunset", f14, GRect(b.size.w-82,sun_label_y,60,16), GTextAlignmentRight);
+    // Times below labels
+    txt(ctx, s_sr_buf, f14, GRect(22,sun_time_y,50,18), GTextAlignmentLeft);
+    txt(ctx, s_ss_buf, f14, GRect(b.size.w-72,sun_time_y,50,18), GTextAlignmentRight);
   }
 
   // -- TIDE INFO (MED + HIGH) --
@@ -875,7 +921,10 @@ static void tick_cb(struct tm *t, TimeUnits u) {
   }
 }
 
-static void battery_cb(BatteryChargeState s) { s_battery=s.charge_percent; }
+static void battery_cb(BatteryChargeState s) {
+  s_battery=s.charge_percent;
+  if(s_canvas) layer_mark_dirty(s_canvas);
+}
 
 static void bt_cb(bool connected) {
   s_bt_connected = connected;
