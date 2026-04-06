@@ -168,37 +168,27 @@
       document.getElementById('modeLow').checked = true;
     }
 
-    // Detect return method: CloudPebble uses return_to param, real phone uses pebblejs://close
-    var returnTo = getParam('return_to');
-
     function returnResult(jsonString) {
-      if (returnTo) {
-        // CloudPebble: redirect back with config data as hash
-        var url = returnTo + '#' + encodeURIComponent(jsonString);
-        window.location.href = url;
-      } else {
-        // Real Pebble phone app
-        window.location.href = 'pebblejs://close#' + encodeURIComponent(jsonString);
-      }
+      // Standard Pebble config return — works on real phone AND CloudPebble
+      var url = 'pebblejs://close#' + encodeURIComponent(jsonString);
+      console.log('Config returning: ' + jsonString);
+      document.location = url;
     }
 
     function returnCancel() {
-      if (returnTo) {
-        window.location.href = returnTo;
-      } else {
-        window.location.href = 'pebblejs://close';
-      }
+      document.location = 'pebblejs://close';
     }
 
     // Save button
     document.getElementById('saveBtn').addEventListener('click', function () {
       var selectedMode = document.querySelector('input[name="displayMode"]:checked');
       var result = {
-        zipCode: zipField.value.trim(),
+        zipCode: zipField.value.trim() || '08226',
         stationId: stationField.value.trim(),
-        displayMode: selectedMode ? selectedMode.value : '0'
+        displayMode: selectedMode ? selectedMode.value : '1'
       };
 
+      console.log('Saving config:', JSON.stringify(result));
       returnResult(JSON.stringify(result));
     });
 
