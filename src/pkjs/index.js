@@ -368,8 +368,31 @@ Pebble.addEventListener('webviewclosed', function (e) {
       if (config.displayMode !== undefined) settings.displayMode = parseInt(config.displayMode);
       saveSettings();
       console.log('Settings updated, zip: ' + settings.zipCode);
-      // Fetch new data with updated location
-      fetchAllData();
+
+      // Check if dev mode values were sent
+      if (config.devMode) {
+        console.log('Dev mode: sending manual test values');
+        var devMessage = {
+          'TIDE_HEIGHT': config.tideHeight,
+          'TIDE_STATE': config.tideState,
+          'SUNRISE_HOUR': config.sunriseHour,
+          'SUNRISE_MIN': config.sunriseMin,
+          'SUNSET_HOUR': config.sunsetHour,
+          'SUNSET_MIN': config.sunsetMin,
+          'NEXT_HIGH_HOUR': config.nextHighHour,
+          'NEXT_HIGH_MIN': config.nextHighMin,
+          'NEXT_LOW_HOUR': config.nextLowHour,
+          'NEXT_LOW_MIN': config.nextLowMin,
+          'DISPLAY_MODE': settings.displayMode
+        };
+        Pebble.sendAppMessage(devMessage,
+          function () { console.log('Dev values sent to watch'); },
+          function (e) { console.log('Error sending dev values'); }
+        );
+      } else {
+        // Normal: fetch new data with updated location
+        fetchAllData();
+      }
     } catch (err) {
       console.log('Config parse error: ' + err);
     }

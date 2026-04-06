@@ -105,6 +105,44 @@
       background: #4fc3f7;
       color: #1a1a2e;
     }
+    .dev-section { display: none; }
+    .dev-section.visible { display: block; }
+    .dev-toggle {
+      text-align: center;
+      margin: 16px 0 0;
+      font-size: 12px;
+      color: #555;
+      cursor: pointer;
+    }
+    .dev-toggle:hover { color: #4fc3f7; }
+    .row { display: flex; gap: 10px; }
+    .row > div { flex: 1; }
+    .row label { font-size: 12px; }
+    .row input[type="text"] {
+      padding: 8px;
+      font-size: 14px;
+    }
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: #4fc3f7;
+    }
+    .slider-row span {
+      min-width: 40px;
+      text-align: right;
+      color: #4fc3f7;
+      font-weight: bold;
+    }
+    .btn-dev {
+      background: #e65100;
+      color: #fff;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -137,6 +175,53 @@
     <label for="stationId">NOAA Station ID</label>
     <input type="text" id="stationId" placeholder="e.g. 8534720">
     <p class="hint">Override auto-detection. Find your station at <br>tidesandcurrents.noaa.gov</p>
+  </div>
+
+  <div class="dev-toggle" id="devToggle">&#x1F527; Developer / Test Mode</div>
+
+  <div class="dev-section" id="devSection">
+    <div class="card">
+      <h2>Test Values</h2>
+      <p class="hint">Send manual values directly to the watch for testing.</p>
+
+      <label>Tide Height</label>
+      <div class="slider-row">
+        <span>Low</span>
+        <input type="range" id="devTide" min="0" max="100" value="50">
+        <span id="devTideVal">50%</span>
+      </div>
+
+      <div class="toggle-group" style="margin-bottom:12px">
+        <input type="radio" name="devTideState" id="devRising" value="1" checked>
+        <label for="devRising">Rising</label>
+        <input type="radio" name="devTideState" id="devFalling" value="0">
+        <label for="devFalling">Falling</label>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Sunrise</label>
+          <input type="text" id="devSunrise" placeholder="6:30" value="6:30">
+        </div>
+        <div>
+          <label>Sunset</label>
+          <input type="text" id="devSunset" placeholder="19:45" value="19:45">
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Next High Tide</label>
+          <input type="text" id="devNextHigh" placeholder="12:00" value="12:00">
+        </div>
+        <div>
+          <label>Next Low Tide</label>
+          <input type="text" id="devNextLow" placeholder="18:00" value="18:00">
+        </div>
+      </div>
+
+      <button class="btn btn-dev" id="devSendBtn">Send Test Values to Watch</button>
+    </div>
   </div>
 
   <button class="btn btn-save" id="saveBtn">Save Settings</button>
@@ -201,6 +286,57 @@
     // Cancel button
     document.getElementById('cancelBtn').addEventListener('click', function () {
       returnCancel();
+    });
+
+    // Dev mode toggle
+    document.getElementById('devToggle').addEventListener('click', function () {
+      var section = document.getElementById('devSection');
+      section.classList.toggle('visible');
+    });
+
+    // Tide slider display
+    var tideSlider = document.getElementById('devTide');
+    var tideVal = document.getElementById('devTideVal');
+    tideSlider.addEventListener('input', function () {
+      tideVal.textContent = tideSlider.value + '%';
+    });
+
+    // Parse "H:MM" or "HH:MM" into {hour, min}
+    function parseTime(str) {
+      var parts = str.split(':');
+      return {
+        hour: parseInt(parts[0]) || 0,
+        min: parseInt(parts[1]) || 0
+      };
+    }
+
+    // Send test values button
+    document.getElementById('devSendBtn').addEventListener('click', function () {
+      var tideState = document.querySelector('input[name="devTideState"]:checked');
+      var sunrise = parseTime(document.getElementById('devSunrise').value);
+      var sunset = parseTime(document.getElementById('devSunset').value);
+      var nextHigh = parseTime(document.getElementById('devNextHigh').value);
+      var nextLow = parseTime(document.getElementById('devNextLow').value);
+      var selectedMode = document.querySelector('input[name="displayMode"]:checked');
+
+      var result = {
+        zipCode: zipField.value.trim(),
+        stationId: stationField.value.trim(),
+        displayMode: selectedMode ? selectedMode.value : '0',
+        devMode: true,
+        tideHeight: parseInt(tideSlider.value),
+        tideState: tideState ? parseInt(tideState.value) : 1,
+        sunriseHour: sunrise.hour,
+        sunriseMin: sunrise.min,
+        sunsetHour: sunset.hour,
+        sunsetMin: sunset.min,
+        nextHighHour: nextHigh.hour,
+        nextHighMin: nextHigh.min,
+        nextLowHour: nextLow.hour,
+        nextLowMin: nextLow.min
+      };
+
+      returnResult(JSON.stringify(result));
     });
   </script>
 </body>

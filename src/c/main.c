@@ -52,6 +52,10 @@
 #define PERSIST_DATA_VALID     10
 #define PERSIST_DISPLAY_MODE   11
 
+// Dev/test mode - cycle through preset scenarios with up/down buttons
+#define DEV_MODE 1
+#define NUM_TEST_PRESETS 6
+
 // Palm tree
 #define PALM_TRUNK_X_PCT  18
 #define PALM_TOP_Y_PCT    15
@@ -165,6 +169,71 @@ static char s_tide_info_buffer[32];
 static char s_sun_info_buffer[32];
 
 static int s_display_mode = DISPLAY_MODE_MINIMAL;
+
+#if DEV_MODE
+static int s_test_preset = -1;  // -1 = live data, 0+ = test preset index
+static const char *s_preset_names[] = {
+  "Dawn Rise",
+  "Morning Hi",
+  "Noon Mid",
+  "Dusk Low",
+  "Night Fall",
+  "Night Rise"
+};
+
+typedef struct {
+  int hour;
+  int min;
+  int sunrise_hour;
+  int sunrise_min;
+  int sunset_hour;
+  int sunset_min;
+  int tide_pct;
+  int tide_state;  // 0=falling, 1=rising
+  int next_high_hour;
+  int next_high_min;
+  int next_low_hour;
+  int next_low_min;
+} TestPreset;
+
+static const TestPreset s_test_presets[NUM_TEST_PRESETS] = {
+  // Dawn + Rising tide (25%)
+  { 6, 15,   6, 0,  19, 45,   25, 1,   10, 30,  16, 45 },
+  // Morning + High tide (95%)
+  { 9, 30,   6, 0,  19, 45,   95, 0,   9, 15,   15, 30 },
+  // Noon + Mid tide falling (50%)
+  { 12, 0,   6, 0,  19, 45,   50, 0,   18, 0,   15, 30 },
+  // Dusk + Low tide (10%)
+  { 19, 30,  6, 0,  19, 45,   10, 1,   22, 0,   19, 15 },
+  // Night + Falling tide (60%)
+  { 22, 0,   6, 0,  19, 45,   60, 0,   4, 30,   22, 30 },
+  // Late night + Rising tide (30%)
+  { 2, 30,   6, 0,  19, 45,   30, 1,   4, 30,   0, 15 },
+};
+
+static void apply_test_preset(int index) {
+  if (index < 0 || index >= NUM_TEST_PRESETS) return;
+  const TestPreset *p = &s_test_presets[index];
+
+  s_current_hour = p->hour;
+  s_current_min = p->min;
+  s_tide.sunrise_hour = p->sunrise_hour;
+  s_tide.sunrise_min = p->sunrise_min;
+  s_tide.sunset_hour = p->sunset_hour;
+  s_tide.sunset_min = p->sunset_min;
+  s_tide.tide_height_pct = p->tide_pct;
+  s_tide.tide_state = p->tide_state;
+  s_tide.next_high_hour = p->next_high_hour;
+  s_tide.next_high_min = p->next_high_min;
+  s_tide.next_low_hour = p->next_low_hour;
+  s_tide.next_low_min = p->next_low_min;
+  s_tide.data_valid = true;
+
+  // Override time buffer to show test time
+  snprintf(s_time_buffer, sizeof(s_time_buffer), "%d:%02d", p->hour, p->min);
+  snprintf(s_date_buffer, sizeof(s_date_buffer), "DEV: %s", s_preset_names[index]);
+}
+#endif
 
 static int s_current_hour = 12;
 static int s_current_min = 0;
@@ -703,6 +772,14 @@ static void start_wave_animation(void) {
 // EVENT HANDLERS
 // ============================================================================
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+  #if DEV_MODE
+  if (s_test_preset >= 0) {
+    // In test mode, don't override the preset time
+    if (s_canvas_layer) layer_mark_dirty(s_canvas_layer);
+    return;
+  }
+  #endif
+
   update_time();
 
   // Brief wave animation every 5 minutes
@@ -730,6 +807,55 @@ static void battery_callback(BatteryChargeState state) {
 static void tap_handler(AccelAxisType axis, int32_t direction) {
   start_wave_animation();
 }
+
+#if DEV_MODE
+// ============================================================================
+// DEV MODE - BUTTON HANDLERS
+// ============================================================================
+static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
+  // Next preset
+  s_test_preset++;
+  if (s_test_preset >= NUM_TEST_PRESETS) s_test_preset = 0;
+  apply_test_preset(s_test_preset);
+  start_wave_animation();
+  APP_LOG(APP_LOG_LEVEL_INFO, "DEV preset %d: %s", s_test_preset,
+          s_preset_names[s_test_preset]);
+}
+
+static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
+  // Previous preset
+  s_test_preset--;
+  if (s_test_preset < 0) s_test_preset = NUM_TEST_PRESETS - 1;
+  apply_test_preset(s_test_preset);
+  start_wave_animation();
+  APP_LOG(APP_LOG_LEVEL_INFO, "DEV preset %d: %s", s_test_preset,
+          s_preset_names[s_test_preset]);
+}
+
+static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
+  // Toggle between minimal and detailed display
+  s_display_mode = (s_display_mode == DISPLAY_MODE_MINIMAL)
+                   ? DISPLAY_MODE_DETAILED : DISPLAY_MODE_MINIMAL;
+  if (s_canvas_layer) layer_mark_dirty(s_canvas_layer);
+  APP_LOG(APP_LOG_LEVEL_INFO, "DEV display mode: %s",
+          s_display_mode ? "DETAILED" : "MINIMAL");
+}
+
+static void select_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+  // Long press select: return to live data
+  s_test_preset = -1;
+  update_time();
+  if (s_canvas_layer) layer_mark_dirty(s_canvas_layer);
+  APP_LOG(APP_LOG_LEVEL_INFO, "DEV: back to live data");
+}
+
+static void click_config_provider(void *context) {
+  window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
+  window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
+  window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
+  window_long_click_subscribe(BUTTON_ID_SELECT, 700, select_long_click_handler, NULL);
+}
+#endif
 
 // ============================================================================
 // APPMESSAGE HANDLERS
@@ -878,6 +1004,11 @@ static void init(void) {
     .load = main_window_load,
     .unload = main_window_unload
   });
+
+  #if DEV_MODE
+  window_set_click_config_provider(s_main_window, click_config_provider);
+  #endif
+
   window_stack_push(s_main_window, true);
 
   // Subscribe to services
