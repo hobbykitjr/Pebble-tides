@@ -277,11 +277,19 @@ static void draw_sky(GContext *ctx, GRect b) {
         // Solid fill for main band
         graphics_context_set_fill_color(ctx,sc[i]);
         graphics_fill_rect(ctx,GRect(0,y0,b.size.w,h1),0,GCornerNone);
-        // Dither transition: blend 6px at bottom edge into next color
+        // Dither transition: blend at band edges for smooth gradient
         if(i<n-1){
-          int dith_start=y0+h1-6;
-          for(int dy=0;dy<6;dy++){
-            if((dy+dith_start)%2==0){
+          // 16px dither zone: gradually transition from this color to next
+          int dz=16;
+          int dith_start=y0+h1-dz;
+          for(int dy=0;dy<dz;dy++){
+            // More next-color rows as we go deeper into the zone
+            // First half: every 3rd row. Second half: every other row.
+            bool use_next;
+            if(dy<dz/3) use_next=((dy%3)==0);
+            else if(dy<dz*2/3) use_next=((dy%2)==0);
+            else use_next=((dy%3)!=0);
+            if(use_next){
               graphics_context_set_fill_color(ctx,sc[i+1]);
               graphics_fill_rect(ctx,GRect(0,dith_start+dy,b.size.w,1),0,GCornerNone);
             }
@@ -414,18 +422,33 @@ static void draw_ocean(GContext *ctx, GRect b) {
   if(sy<=tb) return;
   int oh=sy-tb;
 
-  // Clean solid ocean gradient: cobalt → blue → teal near shore
+  // Ocean gradient with dithered band edges
   #ifdef PBL_COLOR
   {
-    int b3=oh/3; if(b3<1) b3=1;
-    graphics_context_set_fill_color(ctx,C_OCEAN);        // Cobalt
-    graphics_fill_rect(ctx,GRect(0,tb,b.size.w,b3),0,GCornerNone);
-    graphics_context_set_fill_color(ctx,GColorBlue);
-    graphics_fill_rect(ctx,GRect(0,tb+b3,b.size.w,b3),0,GCornerNone);
-    graphics_context_set_fill_color(ctx,GColorVividCerulean);
-    graphics_fill_rect(ctx,GRect(0,tb+b3*2,b.size.w,b3),0,GCornerNone);
-    graphics_context_set_fill_color(ctx,GColorTiffanyBlue);
-    graphics_fill_rect(ctx,GRect(0,tb+b3*3,b.size.w,oh-b3*3),0,GCornerNone);
+    GColor oc[]={C_OCEAN, GColorBlue, GColorVividCerulean, GColorTiffanyBlue};
+    int n=4;
+    int bh=oh/n; if(bh<1) bh=1;
+    for(int i=0;i<n;i++){
+      int y0=tb+bh*i;
+      int h1=(i==n-1)?oh-bh*i:bh;
+      graphics_context_set_fill_color(ctx,oc[i]);
+      graphics_fill_rect(ctx,GRect(0,y0,b.size.w,h1),0,GCornerNone);
+      // Dither 10px at each band boundary
+      if(i<n-1){
+        int dz=10;
+        int ds=y0+h1-dz;
+        for(int dy=0;dy<dz;dy++){
+          bool use_next;
+          if(dy<dz/3) use_next=((dy%3)==0);
+          else if(dy<dz*2/3) use_next=((dy%2)==0);
+          else use_next=((dy%3)!=0);
+          if(use_next){
+            graphics_context_set_fill_color(ctx,oc[i+1]);
+            graphics_fill_rect(ctx,GRect(0,ds+dy,b.size.w,1),0,GCornerNone);
+          }
+        }
+      }
+    }
   }
   #else
   graphics_context_set_fill_color(ctx,GColorBlack);
@@ -769,6 +792,14 @@ static void draw_hud(GContext *ctx, GRect b) {
 
     // Fixed position at bottom of screen
     int iy=b.size.h-40;
+
+    // HIGH: city name on same line, shifted up slightly
+    if(s_det==DETAIL_HIGH && s_d.town[0]){
+      graphics_context_set_text_color(ctx,C_INFO);
+      graphics_draw_text(ctx,s_d.town,f14,GRect(0,iy-12,b.size.w,14),
+        GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
+    }
+
     graphics_context_set_text_color(ctx,C_SHAD);
     graphics_draw_text(ctx,s_t1,f14,GRect(1,iy+1,b.size.w,18),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
