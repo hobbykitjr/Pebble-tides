@@ -472,7 +472,12 @@ Pebble.addEventListener('webviewclosed', function (e) {
   console.log('webviewclosed fired! response: ' + (e ? JSON.stringify(e.response) : 'null'));
   if (e && e.response && e.response.length > 0) {
     try {
-      var config = JSON.parse(decodeURIComponent(e.response));
+      // CloudPebble may return "response=ENCODED_JSON" — strip prefix
+      var rawResponse = e.response;
+      if (rawResponse.indexOf('response=') === 0) {
+        rawResponse = rawResponse.substring(9);
+      }
+      var config = JSON.parse(decodeURIComponent(rawResponse));
       if (config.zipCode) settings.zipCode = config.zipCode;
       if (config.stationId !== undefined) settings.stationId = config.stationId;
       if (config.displayMode !== undefined) settings.displayMode = parseInt(config.displayMode);

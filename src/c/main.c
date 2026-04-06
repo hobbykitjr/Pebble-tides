@@ -261,33 +261,28 @@ static void draw_sky(GContext *ctx, GRect b) {
     int twi=twi_pct();
     #ifdef PBL_COLOR
     if(twi>20) {
-      // Dawn/dusk: dithered gradient — alternate rows between colors for blending
-      GColor sky_cols[] = {
-        GColorOxfordBlue,       // 0: Dark navy
-        GColorImperialPurple,   // 1: Deep purple
-        GColorPurple,           // 2: Purple
-        GColorMagenta,          // 3: Vivid pink
-        GColorSunsetOrange,     // 4: Pink-orange
-        C_SKY_DUSK,             // 5: Orange
-        GColorRajah,            // 6: Warm gold
+      // Dawn/dusk: smooth dithered gradient with 2px rows
+      GColor sc[] = {
+        GColorOxfordBlue,
+        GColorImperialPurple,
+        GColorPurple,
+        GColorDarkCandyAppleRed,
+        GColorMagenta,
+        GColorSunsetOrange,
+        GColorMelon,
+        C_SKY_DUSK,
+        GColorRajah,
+        GColorChromeYellow,
       };
-      int n=7;
-      // Each color gets a zone; at zone boundaries, alternate rows for blending
-      for(int y=0;y<sy;y++){
-        // Map y to a float-like position in the color array
-        int pos=(y*n*10)/sy;  // 0 to n*10 (e.g. 0-70)
-        int idx=pos/10;       // Which color zone (0-6)
-        int frac=pos%10;      // Position within zone (0-9)
-        if(idx>=n-1) idx=n-2;
-        // Dither: use frac to decide which of two adjacent colors
-        GColor c;
-        if(frac<5 || (frac==5 && (y%2==0))) {
-          c=sky_cols[idx];
-        } else {
-          c=sky_cols[idx+1];
-        }
+      int n=10;
+      for(int y=0;y<sy;y+=2){
+        int pos=(y*(n-1)*100)/sy;
+        int idx=pos/100;
+        int frac=pos%100;
+        if(idx>=n-1){idx=n-2;frac=99;}
+        GColor c=(frac<50||(frac<60&&((y/2)%2==0)))?sc[idx]:sc[idx+1];
         graphics_context_set_fill_color(ctx,c);
-        graphics_fill_rect(ctx,GRect(0,y,b.size.w,1),0,GCornerNone);
+        graphics_fill_rect(ctx,GRect(0,y,b.size.w,2),0,GCornerNone);
       }
     } else {
       // Normal day: solid blue sky
@@ -415,27 +410,27 @@ static void draw_ocean(GContext *ctx, GRect b) {
   if(sy<=tb) return;
   int oh=sy-tb;
 
-  // Dithered ocean gradient: deep → shore (blended, no hard lines)
+  // Smooth dithered ocean gradient with 2px rows
   #ifdef PBL_COLOR
   {
     GColor oc[] = {
-      C_OCEAN,             // Cobalt
-      GColorBlue,          // Medium blue
-      GColorVividCerulean, // Lighter blue
-      GColorPictonBlue,    // Light blue
-      GColorTiffanyBlue    // Teal at shore
+      GColorCobaltBlue,
+      GColorDukeBlue,
+      GColorBlue,
+      GColorVividCerulean,
+      GColorPictonBlue,
+      GColorCeleste,
+      GColorTiffanyBlue
     };
-    int n=5;
-    for(int y=0;y<oh;y++){
-      int pos=(y*n*10)/oh;
-      int idx=pos/10;
-      int frac=pos%10;
-      if(idx>=n-1) idx=n-2;
-      GColor c;
-      if(frac<5||(frac==5&&(y%2==0))) c=oc[idx];
-      else c=oc[idx+1];
+    int n=7;
+    for(int y=0;y<oh;y+=2){
+      int pos=(y*(n-1)*100)/oh;
+      int idx=pos/100;
+      int frac=pos%100;
+      if(idx>=n-1){idx=n-2;frac=99;}
+      GColor c=(frac<50||(frac<60&&((y/2)%2==0)))?oc[idx]:oc[idx+1];
       graphics_context_set_fill_color(ctx,c);
-      graphics_fill_rect(ctx,GRect(0,tb+y,b.size.w,1),0,GCornerNone);
+      graphics_fill_rect(ctx,GRect(0,tb+y,b.size.w,2),0,GCornerNone);
     }
   }
   #else
@@ -626,8 +621,8 @@ static void draw_plane(GContext *ctx, GRect b) {
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 
-  // Plane body at same vertical center as banner
-  int plane_y=by+2;  // Centered in the 14px banner
+  // Plane body centered in the 14px banner
+  int plane_y=by+4;
   graphics_context_set_fill_color(ctx,C_PLANE);
   graphics_fill_rect(ctx,GRect(px,plane_y,14,5),0,GCornerNone);
   // Wings
