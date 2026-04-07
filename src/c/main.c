@@ -606,8 +606,8 @@ static void draw_battery(GContext *ctx, GRect b) {
 // ============================================================================
 static void draw_bt(GContext *ctx, GRect b) {
   if(s_bt || s_hide_bt) return;
-  // Centered sign, bigger
-  int sx=b.size.w/2-15, py=b.size.h-52;
+  // Centered sign, bigger, raised above tide text
+  int sx=b.size.w/2-15, py=b.size.h-68;
   // Post
   graphics_context_set_fill_color(ctx,C_SIGN_P);
   graphics_fill_rect(ctx,GRect(sx+13,py+18,3,18),0,GCornerNone);
@@ -644,9 +644,9 @@ static void draw_bt(GContext *ctx, GRect b) {
 static void draw_uv_flag(GContext *ctx, GRect b) {
   if(s_d.uv<=0 && is_night()) return;  // Hide at night with no UV
 
-  int cx=192;
-  int pole_bot=b.size.h-36;
-  int pole_top=pole_bot-30;
+  int cx=185;
+  int pole_bot=b.size.h-34;
+  int pole_top=pole_bot-36;
 
   // Pole
   #ifdef PBL_COLOR
@@ -656,7 +656,7 @@ static void draw_uv_flag(GContext *ctx, GRect b) {
   #endif
   graphics_fill_rect(ctx,GRect(cx,pole_top,3,pole_bot-pole_top),0,GCornerNone);
 
-  // Flag (22x16 rectangle hanging from pole top)
+  // Flag (28x20 rectangle — big enough for 2-digit UV number)
   GColor fc;
   #ifdef PBL_COLOR
   if(s_d.uv>=11)      fc=GColorPurple;
@@ -668,23 +668,26 @@ static void draw_uv_flag(GContext *ctx, GRect b) {
   fc=(s_d.uv>=6)?GColorWhite:GColorLightGray;
   #endif
   graphics_context_set_fill_color(ctx,fc);
-  graphics_fill_rect(ctx,GRect(cx+3,pole_top,22,16),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(cx+3,pole_top,28,20),0,GCornerNone);
 
-  // Flag border
+  // Thick dark border for contrast against sand
   graphics_context_set_stroke_color(ctx,GColorBlack);
-  graphics_draw_rect(ctx,GRect(cx+3,pole_top,22,16));
+  graphics_context_set_stroke_width(ctx,2);
+  graphics_draw_rect(ctx,GRect(cx+2,pole_top-1,30,22));
+  graphics_context_set_stroke_width(ctx,1);
 
-  // UV number on flag
+  // UV number on flag (centered in flag area)
   if(!is_night() && s_d.uv>0) {
     char uv[3];
     snprintf(uv,sizeof(uv),"%d",s_d.uv);
-    GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
+    GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD);
     #ifdef PBL_COLOR
-    graphics_context_set_text_color(ctx,(s_d.uv>=8)?GColorWhite:GColorBlack);
+    // White text on dark flags, black text on bright flags
+    graphics_context_set_text_color(ctx,(s_d.uv>=6)?GColorWhite:GColorBlack);
     #else
     graphics_context_set_text_color(ctx,GColorBlack);
     #endif
-    graphics_draw_text(ctx,uv,f,GRect(cx+3,pole_top-5,22,24),
+    graphics_draw_text(ctx,uv,f,GRect(cx+3,pole_top-4,28,28),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 
