@@ -54,6 +54,7 @@
 #define P_DEV_MODE     16
 #define P_LARGE_FONT   17
 #define P_UV_INDEX     18
+#define P_HIDE_BT      19
 
 // Weather
 #define WX_CLEAR 0
@@ -146,7 +147,7 @@ static Data s_d={.sr_h=6,.sr_m=15,.ss_h=19,.ss_m=45,.tide_pct=50,.tide_st=1,
 
 static char s_tbuf[8],s_dbuf[16],s_t1[40],s_t2[40],s_sr[8],s_ss[8],s_tmp[8];
 static int s_det=DETAIL_MED, s_hr=12, s_mn=0;
-static bool s_dev=false, s_lgfont=false;
+static bool s_dev=false, s_lgfont=false, s_hide_bt=false;
 
 static bool s_plane=false;
 static int s_px=-50;
@@ -544,11 +545,11 @@ static void draw_sand(GContext *ctx, GRect b) {
 // DRAW: BATTERY UMBRELLA
 // ============================================================================
 static void draw_battery(GContext *ctx, GRect b) {
-  // Simple beach umbrella — 5 colored blocks for battery segments
-  int cx=62;
-  int pole_bot=b.size.h-42;
-  int pole_top=pole_bot-16;
-  int r=14;
+  // Beach umbrella — 5 colored blocks for battery segments
+  int cx=58;
+  int pole_bot=b.size.h-36;
+  int pole_top=pole_bot-26;
+  int r=22;
   int dome_y=pole_top-1;
 
   // Pole
@@ -560,11 +561,10 @@ static void draw_battery(GContext *ctx, GRect b) {
   graphics_fill_rect(ctx,GRect(cx-1,pole_top,3,pole_bot-pole_top),0,GCornerNone);
 
   // Canopy: 5 colored segments (each = 20% battery)
-  // Draw as simple rectangles of decreasing height to form dome shape
   int seg_w=(r*2)/5;
   int segs=5;
   int filled=(s_bat+19)/20;  // 0-5 segments filled
-  int heights[]={6, 10, 12, 10, 6};  // Dome profile
+  int heights[]={8, 14, 18, 14, 8};  // Dome profile (bigger)
 
   for(int i=0;i<segs;i++){
     int sx=cx-r+i*seg_w;
@@ -605,35 +605,37 @@ static void draw_battery(GContext *ctx, GRect b) {
 // DRAW: BT SIGN
 // ============================================================================
 static void draw_bt(GContext *ctx, GRect b) {
-  if(s_bt) return;
-  // Fixed position right side, above tide text area
-  int sx=b.size.w-65, py=b.size.h-48;
+  if(s_bt || s_hide_bt) return;
+  // Centered sign, bigger
+  int sx=b.size.w/2-15, py=b.size.h-52;
   // Post
   graphics_context_set_fill_color(ctx,C_SIGN_P);
-  graphics_fill_rect(ctx,GRect(sx+8,py,3,20),0,GCornerNone);
-  // Sign board — white background for contrast
+  graphics_fill_rect(ctx,GRect(sx+13,py+18,3,18),0,GCornerNone);
+  // Sign board — white background
   graphics_context_set_fill_color(ctx,GColorWhite);
-  graphics_fill_rect(ctx,GRect(sx,py,20,14),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(sx,py,30,20),0,GCornerNone);
   // Board outline
   graphics_context_set_stroke_color(ctx,C_SIGN_P);
   graphics_context_set_stroke_width(ctx,1);
-  graphics_draw_rect(ctx,GRect(sx,py,20,14));
+  graphics_draw_rect(ctx,GRect(sx,py,30,20));
+  // BT symbol (scaled up)
   #ifdef PBL_COLOR
   graphics_context_set_stroke_color(ctx,GColorBlue);
   #else
   graphics_context_set_stroke_color(ctx,GColorBlack);
   #endif
-  graphics_context_set_stroke_width(ctx,1);
-  graphics_draw_line(ctx,GPoint(sx+7,py+2),GPoint(sx+7,py+11));
-  graphics_draw_line(ctx,GPoint(sx+7,py+2),GPoint(sx+13,py+6));
-  graphics_draw_line(ctx,GPoint(sx+13,py+6),GPoint(sx+7,py+7));
-  graphics_draw_line(ctx,GPoint(sx+7,py+7),GPoint(sx+13,py+11));
-  graphics_draw_line(ctx,GPoint(sx+13,py+11),GPoint(sx+7,py+11));
+  graphics_context_set_stroke_width(ctx,2);
+  graphics_draw_line(ctx,GPoint(sx+12,py+2),GPoint(sx+12,py+17));
+  graphics_draw_line(ctx,GPoint(sx+12,py+2),GPoint(sx+20,py+8));
+  graphics_draw_line(ctx,GPoint(sx+20,py+8),GPoint(sx+12,py+10));
+  graphics_draw_line(ctx,GPoint(sx+12,py+10),GPoint(sx+20,py+16));
+  graphics_draw_line(ctx,GPoint(sx+20,py+16),GPoint(sx+12,py+17));
+  // Red slash
   #ifdef PBL_COLOR
   graphics_context_set_stroke_color(ctx,GColorRed);
   #endif
-  graphics_context_set_stroke_width(ctx,2);
-  graphics_draw_line(ctx,GPoint(sx+3,py+2),GPoint(sx+17,py+12));
+  graphics_context_set_stroke_width(ctx,3);
+  graphics_draw_line(ctx,GPoint(sx+4,py+3),GPoint(sx+26,py+17));
 }
 
 // ============================================================================
@@ -642,9 +644,9 @@ static void draw_bt(GContext *ctx, GRect b) {
 static void draw_uv_flag(GContext *ctx, GRect b) {
   if(s_d.uv<=0 && is_night()) return;  // Hide at night with no UV
 
-  int pole_bot=b.size.h-38;
-  int pole_top=pole_bot-22;
-  int cx=s_bt?195:168;  // Shift left when BT sign is showing
+  int cx=192;
+  int pole_bot=b.size.h-36;
+  int pole_top=pole_bot-30;
 
   // Pole
   #ifdef PBL_COLOR
@@ -654,7 +656,7 @@ static void draw_uv_flag(GContext *ctx, GRect b) {
   #endif
   graphics_fill_rect(ctx,GRect(cx,pole_top,3,pole_bot-pole_top),0,GCornerNone);
 
-  // Flag (16x12 rectangle hanging from pole top)
+  // Flag (22x16 rectangle hanging from pole top)
   GColor fc;
   #ifdef PBL_COLOR
   if(s_d.uv>=11)      fc=GColorPurple;
@@ -666,31 +668,31 @@ static void draw_uv_flag(GContext *ctx, GRect b) {
   fc=(s_d.uv>=6)?GColorWhite:GColorLightGray;
   #endif
   graphics_context_set_fill_color(ctx,fc);
-  graphics_fill_rect(ctx,GRect(cx+3,pole_top,16,12),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(cx+3,pole_top,22,16),0,GCornerNone);
 
-  // Flag border for visibility
+  // Flag border
   graphics_context_set_stroke_color(ctx,GColorBlack);
-  graphics_draw_rect(ctx,GRect(cx+3,pole_top,16,12));
+  graphics_draw_rect(ctx,GRect(cx+3,pole_top,22,16));
 
-  // UV number on flag (always shown when daytime)
+  // UV number on flag
   if(!is_night() && s_d.uv>0) {
     char uv[3];
     snprintf(uv,sizeof(uv),"%d",s_d.uv);
-    GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
+    GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
     #ifdef PBL_COLOR
     graphics_context_set_text_color(ctx,(s_d.uv>=8)?GColorWhite:GColorBlack);
     #else
     graphics_context_set_text_color(ctx,GColorBlack);
     #endif
-    graphics_draw_text(ctx,uv,f,GRect(cx+3,pole_top-4,16,18),
+    graphics_draw_text(ctx,uv,f,GRect(cx+3,pole_top-5,22,24),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 
-  // "UV" label below pole (always visible on MED+)
-  if(s_det>=DETAIL_MED) {
+  // HIGH detail: "UV" label below pole
+  if(s_det==DETAIL_HIGH) {
     GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
     graphics_context_set_text_color(ctx,C_INFO);
-    graphics_draw_text(ctx,"UV",f,GRect(cx-2,pole_bot+1,24,16),
+    graphics_draw_text(ctx,"UV",f,GRect(cx-2,pole_bot+1,28,16),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 }
@@ -1006,6 +1008,11 @@ static void inbox_cb(DictionaryIterator *it, void *c){
     persist_write_bool(P_LARGE_FONT,s_lgfont);
     APP_LOG(APP_LOG_LEVEL_INFO,"Large font %s",s_lgfont?"ON":"OFF");
   }
+  t=dict_find(it,MESSAGE_KEY_HIDE_BT);
+  if(t){
+    s_hide_bt=(bool)t->value->int32;
+    persist_write_bool(P_HIDE_BT,s_hide_bt);
+  }
   if(s_dev&&s_pre>=0){
     // In explicit dev mode, only process display mode changes
     t=dict_find(it,MESSAGE_KEY_DISPLAY_MODE);
@@ -1092,6 +1099,7 @@ static void load_data(void){
   if(persist_exists(P_DETAIL)) s_det=persist_read_int(P_DETAIL);
   if(persist_exists(P_DEV_MODE)) s_dev=persist_read_bool(P_DEV_MODE);
   if(persist_exists(P_LARGE_FONT)) s_lgfont=persist_read_bool(P_LARGE_FONT);
+  if(persist_exists(P_HIDE_BT)) s_hide_bt=persist_read_bool(P_HIDE_BT);
 }
 
 // ============================================================================

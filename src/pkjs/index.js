@@ -15,6 +15,7 @@ var settings = {
   stationId: '',      // Optional NOAA station override
   displayMode: 1,     // 0=low, 1=med, 2=high
   largeFont: 0,       // 0=off, 1=on (bigger tide/sun text, 1 row)
+  hideBt: 0,          // 0=show, 1=hide BT disconnected sign
   devMode: 0          // 0=off, 1=on (enables preset cycling via tap)
 };
 
@@ -424,6 +425,7 @@ function loadSettings() {
       if (parsed.stationId) settings.stationId = parsed.stationId;
       if (parsed.displayMode !== undefined) settings.displayMode = parsed.displayMode;
       if (parsed.largeFont !== undefined) settings.largeFont = parsed.largeFont;
+      if (parsed.hideBt !== undefined) settings.hideBt = parsed.hideBt;
       if (parsed.devMode !== undefined) settings.devMode = parsed.devMode;
     }
   } catch (e) {
@@ -442,6 +444,7 @@ Pebble.addEventListener('showConfiguration', function () {
     '&station=' + encodeURIComponent(settings.stationId || '') +
     '&mode=' + settings.displayMode +
     '&lgfont=' + settings.largeFont +
+    '&hidebt=' + settings.hideBt +
     '&dev=' + settings.devMode;
   console.log('Opening config: ' + url);
   Pebble.openURL(url);
@@ -461,12 +464,13 @@ Pebble.addEventListener('webviewclosed', function (e) {
       if (config.stationId !== undefined) settings.stationId = config.stationId;
       if (config.displayMode !== undefined) settings.displayMode = parseInt(config.displayMode);
       if (config.largeFont !== undefined) settings.largeFont = parseInt(config.largeFont);
+      if (config.hideBt !== undefined) settings.hideBt = parseInt(config.hideBt);
       if (config.devMode !== undefined) settings.devMode = parseInt(config.devMode);
       saveSettings();
       console.log('Settings updated: zip=' + settings.zipCode + ' mode=' + settings.displayMode + ' lgfont=' + settings.largeFont + ' dev=' + settings.devMode);
 
       // Send display mode + dev mode immediately, then fetch fresh data
-      Pebble.sendAppMessage({'DISPLAY_MODE': settings.displayMode, 'LARGE_FONT': settings.largeFont, 'DEV_MODE': settings.devMode},
+      Pebble.sendAppMessage({'DISPLAY_MODE': settings.displayMode, 'LARGE_FONT': settings.largeFont, 'HIDE_BT': settings.hideBt, 'DEV_MODE': settings.devMode},
         function() { console.log('Settings sent'); },
         function() { console.log('Settings send failed'); }
       );

@@ -146,6 +146,17 @@
   </div>
 
   <div class="card">
+    <h2>Bluetooth Alert</h2>
+    <div class="toggle-group">
+      <input type="radio" name="hideBt" id="btShow" value="0">
+      <label for="btShow">Show</label>
+      <input type="radio" name="hideBt" id="btHide" value="1">
+      <label for="btHide">Hide</label>
+    </div>
+    <p class="hint">Show or hide the disconnected sign when Bluetooth is lost.</p>
+  </div>
+
+  <div class="card">
     <h2>Advanced (Optional)</h2>
     <label for="stationId">NOAA Station ID</label>
     <input type="text" id="stationId" placeholder="e.g. 8534720">
@@ -188,6 +199,14 @@
       document.getElementById('modeMed').checked = true;
     } else {
       document.getElementById('modeLow').checked = true;
+    }
+
+    // Set hide BT toggle
+    var currentBT = getParam('hidebt') || '0';
+    if (currentBT === '1') {
+      document.getElementById('btHide').checked = true;
+    } else {
+      document.getElementById('btShow').checked = true;
     }
 
     // Set large font toggle
@@ -237,11 +256,13 @@
       var selectedMode = document.querySelector('input[name="displayMode"]:checked');
       var selectedDev = document.querySelector('input[name="devMode"]:checked');
       var selectedLF = document.querySelector('input[name="largeFont"]:checked');
+      var selectedBT = document.querySelector('input[name="hideBt"]:checked');
       var result = {
         zipCode: zipField.value.trim() || '08226',
         stationId: stationField.value.trim(),
         displayMode: selectedMode ? selectedMode.value : '1',
         largeFont: selectedLF ? selectedLF.value : '0',
+        hideBt: selectedBT ? selectedBT.value : '0',
         devMode: selectedDev ? selectedDev.value : '0'
       };
 

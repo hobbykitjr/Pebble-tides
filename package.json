@@ -34,7 +34,8 @@
       "TOWN_NAME": 18,
       "DEV_MODE": 19,
       "LARGE_FONT": 20,
-      "UV_INDEX": 21
+      "UV_INDEX": 21,
+      "HIDE_BT": 22
     },
     "watchapp": {
       "watchface": true
