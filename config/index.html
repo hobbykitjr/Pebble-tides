@@ -135,6 +135,17 @@
   </div>
 
   <div class="card">
+    <h2>Large Font</h2>
+    <div class="toggle-group">
+      <input type="radio" name="largeFont" id="lfOff" value="0">
+      <label for="lfOff">Off</label>
+      <input type="radio" name="largeFont" id="lfOn" value="1">
+      <label for="lfOn">On</label>
+    </div>
+    <p class="hint">Bigger sunrise/sunset and tide text. Shows 1 tide row instead of 2.</p>
+  </div>
+
+  <div class="card">
     <h2>Advanced (Optional)</h2>
     <label for="stationId">NOAA Station ID</label>
     <input type="text" id="stationId" placeholder="e.g. 8534720">
@@ -179,6 +190,14 @@
       document.getElementById('modeLow').checked = true;
     }
 
+    // Set large font toggle
+    var currentLF = getParam('lgfont') || '0';
+    if (currentLF === '1') {
+      document.getElementById('lfOn').checked = true;
+    } else {
+      document.getElementById('lfOff').checked = true;
+    }
+
     // Set dev mode toggle
     var currentDev = getParam('dev') || '0';
     if (currentDev === '1') {
@@ -217,10 +236,12 @@
     document.getElementById('saveBtn').addEventListener('click', function () {
       var selectedMode = document.querySelector('input[name="displayMode"]:checked');
       var selectedDev = document.querySelector('input[name="devMode"]:checked');
+      var selectedLF = document.querySelector('input[name="largeFont"]:checked');
       var result = {
         zipCode: zipField.value.trim() || '08226',
         stationId: stationField.value.trim(),
         displayMode: selectedMode ? selectedMode.value : '1',
+        largeFont: selectedLF ? selectedLF.value : '0',
         devMode: selectedDev ? selectedDev.value : '0'
       };
 

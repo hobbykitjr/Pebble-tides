@@ -14,6 +14,7 @@ var settings = {
   zipCode: '08226',  // Ocean City, NJ (default - has nearby NOAA tide station)
   stationId: '',      // Optional NOAA station override
   displayMode: 1,     // 0=low, 1=med, 2=high
+  largeFont: 0,       // 0=off, 1=on (bigger tide/sun text, 1 row)
   devMode: 0          // 0=off, 1=on (enables preset cycling via tap)
 };
 
@@ -415,6 +416,7 @@ function loadSettings() {
       if (parsed.zipCode) settings.zipCode = parsed.zipCode;
       if (parsed.stationId) settings.stationId = parsed.stationId;
       if (parsed.displayMode !== undefined) settings.displayMode = parsed.displayMode;
+      if (parsed.largeFont !== undefined) settings.largeFont = parsed.largeFont;
       if (parsed.devMode !== undefined) settings.devMode = parsed.devMode;
     }
   } catch (e) {
@@ -432,6 +434,7 @@ Pebble.addEventListener('showConfiguration', function () {
     '?zip=' + encodeURIComponent(settings.zipCode) +
     '&station=' + encodeURIComponent(settings.stationId || '') +
     '&mode=' + settings.displayMode +
+    '&lgfont=' + settings.largeFont +
     '&dev=' + settings.devMode;
   console.log('Opening config: ' + url);
   Pebble.openURL(url);
@@ -450,12 +453,13 @@ Pebble.addEventListener('webviewclosed', function (e) {
       if (config.zipCode) settings.zipCode = config.zipCode;
       if (config.stationId !== undefined) settings.stationId = config.stationId;
       if (config.displayMode !== undefined) settings.displayMode = parseInt(config.displayMode);
+      if (config.largeFont !== undefined) settings.largeFont = parseInt(config.largeFont);
       if (config.devMode !== undefined) settings.devMode = parseInt(config.devMode);
       saveSettings();
-      console.log('Settings updated: zip=' + settings.zipCode + ' mode=' + settings.displayMode + ' dev=' + settings.devMode);
+      console.log('Settings updated: zip=' + settings.zipCode + ' mode=' + settings.displayMode + ' lgfont=' + settings.largeFont + ' dev=' + settings.devMode);
 
       // Send display mode + dev mode immediately, then fetch fresh data
-      Pebble.sendAppMessage({'DISPLAY_MODE': settings.displayMode, 'DEV_MODE': settings.devMode},
+      Pebble.sendAppMessage({'DISPLAY_MODE': settings.displayMode, 'LARGE_FONT': settings.largeFont, 'DEV_MODE': settings.devMode},
         function() { console.log('Settings sent'); },
         function() { console.log('Settings send failed'); }
       );

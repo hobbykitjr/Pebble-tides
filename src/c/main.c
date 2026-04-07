@@ -52,6 +52,7 @@
 #define P_PREV_TIDE_H  14
 #define P_PREV_TIDE_M  15
 #define P_DEV_MODE     16
+#define P_LARGE_FONT   17
 
 // Weather
 #define WX_CLEAR 0
@@ -144,7 +145,7 @@ static Data s_d={.sr_h=6,.sr_m=15,.ss_h=19,.ss_m=45,.tide_pct=50,.tide_st=1,
 
 static char s_tbuf[8],s_dbuf[16],s_t1[40],s_t2[40],s_sr[8],s_ss[8],s_tmp[8];
 static int s_det=DETAIL_MED, s_hr=12, s_mn=0;
-static bool s_dev=false;
+static bool s_dev=false, s_lgfont=false;
 
 static bool s_plane=false;
 static int s_px=-50;
@@ -722,20 +723,23 @@ static void draw_hud(GContext *ctx, GRect b) {
   txt(ctx,s_dbuf,f18,GRect(0,ty+42,b.size.w,22),GTextAlignmentCenter);
 
   // -- SUNRISE/SUNSET at 9 and 3 o'clock --
-  // MED: times only. HIGH: labels + times.
+  // MED: times only. HIGH: labels + times (unless large font).
   if(s_det>=DETAIL_MED) {
     snprintf(s_sr,sizeof(s_sr),"%d:%02d",fmt_h(s_d.sr_h),s_d.sr_m);
     snprintf(s_ss,sizeof(s_ss),"%d:%02d",fmt_h(s_d.ss_h),s_d.ss_m);
+    GFont sf=s_lgfont?f18:f14;
     int mid_y=b.size.h/2;
-    if(s_det>=DETAIL_HIGH) {
-      // HIGH: labels above times
+    if(s_det>=DETAIL_HIGH && !s_lgfont) {
+      // HIGH: labels above times (skip in large font mode)
       txt(ctx,"Sunrise",f14,GRect(8,mid_y-18,60,16),GTextAlignmentLeft);
       txt(ctx,"Sunset",f14,GRect(b.size.w-68,mid_y-18,60,16),GTextAlignmentRight);
     }
     // Times at 9 and 3 o'clock
-    int time_y=(s_det>=DETAIL_HIGH)?mid_y-4:mid_y-10;
-    txt(ctx,s_sr,f14,GRect(8,time_y,50,18),GTextAlignmentLeft);
-    txt(ctx,s_ss,f14,GRect(b.size.w-58,time_y,50,18),GTextAlignmentRight);
+    int time_y=(s_det>=DETAIL_HIGH&&!s_lgfont)?mid_y-4:mid_y-10;
+    if(s_lgfont) time_y=mid_y-12;
+    int sw=s_lgfont?60:50;
+    txt(ctx,s_sr,sf,GRect(8,time_y,sw,22),GTextAlignmentLeft);
+    txt(ctx,s_ss,sf,GRect(b.size.w-8-sw,time_y,sw,22),GTextAlignmentRight);
   }
 
   // -- TIDE INFO (MED + HIGH) --
@@ -766,23 +770,26 @@ static void draw_hud(GContext *ctx, GRect b) {
       snprintf(s_t2,sizeof(s_t2),"%s %d:%02d",fl,fmt_h(fh),fm);
     }
 
-    // Fixed position at bottom of screen
-    int iy=b.size.h-40;
+    GFont tf=s_lgfont?f18:f14;
+    int th=s_lgfont?22:18;
 
-    // HIGH: city name on same line, shifted up slightly
-    if(s_det==DETAIL_HIGH && s_d.town[0]){
+    // Fixed position at bottom of screen
+    int iy=s_lgfont?(b.size.h-34):(b.size.h-40);
+
+    // HIGH: city name (skip if large font — no room with 1 row)
+    if(s_det==DETAIL_HIGH && s_d.town[0] && !s_lgfont){
       graphics_context_set_text_color(ctx,C_INFO);
       graphics_draw_text(ctx,s_d.town,f14,GRect(0,iy-12,b.size.w,14),
         GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
     }
 
     graphics_context_set_text_color(ctx,C_SHAD);
-    graphics_draw_text(ctx,s_t1,f14,GRect(1,iy+1,b.size.w,18),
+    graphics_draw_text(ctx,s_t1,tf,GRect(1,iy+1,b.size.w,th),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
     graphics_context_set_text_color(ctx,C_INFO);
-    graphics_draw_text(ctx,s_t1,f14,GRect(0,iy,b.size.w,18),
+    graphics_draw_text(ctx,s_t1,tf,GRect(0,iy,b.size.w,th),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
-    if(s_t2[0]){
+    if(s_t2[0] && !s_lgfont){
       graphics_context_set_text_color(ctx,C_INFO);
       graphics_draw_text(ctx,s_t2,f14,GRect(0,iy+13,b.size.w,18),
         GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
@@ -933,6 +940,12 @@ static void inbox_cb(DictionaryIterator *it, void *c){
     APP_LOG(APP_LOG_LEVEL_INFO,"Dev mode %s",s_dev?"ON":"OFF");
     if(!s_dev){s_pre=-1; upd_time();}  // Exit dev presets, show real time
   }
+  t=dict_find(it,MESSAGE_KEY_LARGE_FONT);
+  if(t){
+    s_lgfont=(bool)t->value->int32;
+    persist_write_bool(P_LARGE_FONT,s_lgfont);
+    APP_LOG(APP_LOG_LEVEL_INFO,"Large font %s",s_lgfont?"ON":"OFF");
+  }
   if(s_dev&&s_pre>=0){
     // In explicit dev mode, only process display mode changes
     t=dict_find(it,MESSAGE_KEY_DISPLAY_MODE);
@@ -1015,6 +1028,7 @@ static void load_data(void){
   if(persist_exists(P_WEATHER)) s_d.wx=persist_read_int(P_WEATHER);
   if(persist_exists(P_DETAIL)) s_det=persist_read_int(P_DETAIL);
   if(persist_exists(P_DEV_MODE)) s_dev=persist_read_bool(P_DEV_MODE);
+  if(persist_exists(P_LARGE_FONT)) s_lgfont=persist_read_bool(P_LARGE_FONT);
 }
 
 // ============================================================================
