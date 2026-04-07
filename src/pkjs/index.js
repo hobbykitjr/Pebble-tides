@@ -5,7 +5,7 @@
  * - Clay settings (zip code / NOAA station ID)
  * - Geocoding zip code to lat/lng
  * - NOAA Tides & Currents API for tide data
- * - Sunrise-Sunset API for sun times
+ * - Open-Meteo for weather + sunrise/sunset (timezone-aware)
  * - Sends all data to watch via AppMessage
  */
 
@@ -278,56 +278,7 @@ function processTideData(predictions) {
 }
 
 // ============================================================================
-// SUNRISE/SUNSET API
-// ============================================================================
-// Parse "h:mm:ss AM/PM" format from sunrise-sunset.org (formatted=1)
-function parseSunTime(timeStr) {
-  // e.g. "6:23:45 AM" or "7:45:12 PM" — NOTE: these are UTC from formatted=1
-  var parts = timeStr.trim().split(' ');
-  var timeParts = parts[0].split(':');
-  var hour = parseInt(timeParts[0]);
-  var min = parseInt(timeParts[1]);
-  var ampm = parts[1];
-
-  if (ampm === 'PM' && hour !== 12) hour += 12;
-  if (ampm === 'AM' && hour === 12) hour = 0;
-
-  // Convert UTC to local time via Date object
-  var now = new Date();
-  var utc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), hour, min, 0));
-  return { hour: utc.getHours(), min: utc.getMinutes() };
-}
-
-function fetchSunriseSunset(lat, lng, callback) {
-  // formatted=1 returns times in location's local timezone as "h:mm:ss AM/PM"
-  var url = 'https://api.sunrise-sunset.org/json?lat=' + lat +
-            '&lng=' + lng + '&formatted=1&date=today';
-
-  xhrRequest(url, 'GET', function (responseText) {
-    try {
-      var json = JSON.parse(responseText);
-      if (json.status === 'OK') {
-        var sunrise = parseSunTime(json.results.sunrise);
-        var sunset = parseSunTime(json.results.sunset);
-
-        console.log('Sun times (local): rise=' + sunrise.hour + ':' +
-                    sunrise.min + ' set=' + sunset.hour + ':' + sunset.min);
-
-        callback({
-          sunriseHour: sunrise.hour,
-          sunriseMin: sunrise.min,
-          sunsetHour: sunset.hour,
-          sunsetMin: sunset.min
-        });
-      }
-    } catch (e) {
-      console.log('Sunrise/sunset parse error: ' + e);
-    }
-  });
-}
-
-// ============================================================================
-// WEATHER API (Open-Meteo, free, no key)
+// WEATHER + SUNRISE/SUNSET API (Open-Meteo, free, no key)
 // ============================================================================
 function wmoToSimpleCode(wmo) {
   // Map WMO weather codes to our simplified icons
@@ -344,12 +295,17 @@ function wmoToSimpleCode(wmo) {
   return 1;                          // Default: cloudy
 }
 
-function fetchWeather(lat, lng, callback) {
+function fetchWeatherAndSun(lat, lng, callback) {
+  // Combined call: current weather + daily sunrise/sunset
+  // timezone=auto uses lat/lng to return correct local times
   var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat +
             '&longitude=' + lng +
             '&current=temperature_2m,weather_code,wind_speed_10m' +
+            '&daily=sunrise,sunset' +
             '&temperature_unit=fahrenheit' +
-            '&wind_speed_unit=mph';
+            '&wind_speed_unit=mph' +
+            '&timezone=auto' +
+            '&forecast_days=1';
 
   xhrRequest(url, 'GET', function (responseText) {
     try {
@@ -361,14 +317,25 @@ function fetchWeather(lat, lng, callback) {
       // Override to "windy" if wind > 20mph and not raining/storming
       if (wind > 20 && wxCode < 4) wxCode = 7;
 
+      // Parse sunrise/sunset from ISO local time strings (e.g. "2026-04-07T06:31")
+      var srParts = json.daily.sunrise[0].split('T')[1].split(':');
+      var ssParts = json.daily.sunset[0].split('T')[1].split(':');
+
       console.log('Weather: ' + temp + 'F, code=' + wxCode + ', wind=' + wind + 'mph');
-      callback({ temperature: temp, weatherCode: wxCode });
+      console.log('Sun (local): rise=' + srParts[0] + ':' + srParts[1] +
+                  ' set=' + ssParts[0] + ':' + ssParts[1]);
+
+      callback({
+        temperature: temp, weatherCode: wxCode,
+        sunriseHour: parseInt(srParts[0]), sunriseMin: parseInt(srParts[1]),
+        sunsetHour: parseInt(ssParts[0]), sunsetMin: parseInt(ssParts[1])
+      });
     } catch (e) {
-      console.log('Weather parse error: ' + e);
-      callback({ temperature: 0, weatherCode: 0 });
+      console.log('Weather/sun parse error: ' + e);
+      callback(null);
     }
   }, function () {
-    callback({ temperature: 0, weatherCode: 0 });
+    callback(null);
   });
 }
 
@@ -381,22 +348,18 @@ function fetchAllData() {
   geocodeZip(settings.zipCode, function (lat, lng, placeName) {
     console.log('Geocoded to: ' + lat + ', ' + lng + ' (' + placeName + ')');
 
-    // Fetch all three data sources in parallel
-    var sunData = null, tideResult = null, wxData = null;
-    var pending = 3;
+    // Fetch weather+sun and tides in parallel
+    var wxSunData = null, tideResult = null;
+    var pending = 2;
 
     function trySend() {
       pending--;
       if (pending > 0) return;
 
-      // All data ready, send to watch
+      // Build message — only include fields we have good data for
       var message = {
         'TIDE_HEIGHT': tideResult ? tideResult.tideHeightPct : 50,
         'TIDE_STATE': tideResult ? tideResult.tideState : 1,
-        'SUNRISE_HOUR': sunData ? sunData.sunriseHour : 6,
-        'SUNRISE_MIN': sunData ? sunData.sunriseMin : 0,
-        'SUNSET_HOUR': sunData ? sunData.sunsetHour : 19,
-        'SUNSET_MIN': sunData ? sunData.sunsetMin : 0,
         'NEXT_HIGH_HOUR': tideResult ? tideResult.nextHigh.hour : 0,
         'NEXT_HIGH_MIN': tideResult ? tideResult.nextHigh.min : 0,
         'NEXT_LOW_HOUR': tideResult ? tideResult.nextLow.hour : 0,
@@ -404,10 +367,18 @@ function fetchAllData() {
         'PREV_TIDE_HOUR': tideResult ? tideResult.prevTideTime.hour : 0,
         'PREV_TIDE_MIN': tideResult ? tideResult.prevTideTime.min : 0,
         'DISPLAY_MODE': settings.displayMode,
-        'TEMPERATURE': wxData ? wxData.temperature : 0,
-        'WEATHER_CODE': wxData ? wxData.weatherCode : 0,
         'TOWN_NAME': placeName || ''
       };
+
+      // Only include weather/sun if API succeeded (don't overwrite with 0)
+      if (wxSunData) {
+        message['TEMPERATURE'] = wxSunData.temperature;
+        message['WEATHER_CODE'] = wxSunData.weatherCode;
+        message['SUNRISE_HOUR'] = wxSunData.sunriseHour;
+        message['SUNRISE_MIN'] = wxSunData.sunriseMin;
+        message['SUNSET_HOUR'] = wxSunData.sunsetHour;
+        message['SUNSET_MIN'] = wxSunData.sunsetMin;
+      }
 
       Pebble.sendAppMessage(message,
         function () { console.log('All data sent to watch'); },
@@ -415,11 +386,9 @@ function fetchAllData() {
       );
     }
 
-    // 1. Sunrise/sunset
-    fetchSunriseSunset(lat, lng, function (data) {
-      sunData = data;
-      console.log('Sun: rise=' + data.sunriseHour + ':' + data.sunriseMin +
-                  ' set=' + data.sunsetHour + ':' + data.sunsetMin);
+    // 1. Weather + sunrise/sunset (combined Open-Meteo call)
+    fetchWeatherAndSun(lat, lng, function (data) {
+      wxSunData = data;  // null on failure
       trySend();
     });
 
@@ -431,12 +400,6 @@ function fetchAllData() {
                     (tideResult.tideState ? 'rising' : 'falling'));
         trySend();
       });
-    });
-
-    // 3. Weather
-    fetchWeather(lat, lng, function (data) {
-      wxData = data;
-      trySend();
     });
   });
 }
