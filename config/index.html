@@ -141,6 +141,17 @@
     <p class="hint">Override auto-detection. Find your station at <br>tidesandcurrents.noaa.gov</p>
   </div>
 
+  <div class="card">
+    <h2>Developer</h2>
+    <div class="toggle-group">
+      <input type="radio" name="devMode" id="devOff" value="0">
+      <label for="devOff">Off</label>
+      <input type="radio" name="devMode" id="devOn" value="1">
+      <label for="devOn">Dev Mode</label>
+    </div>
+    <p class="hint">Tap to cycle through time/weather presets for testing.</p>
+  </div>
+
   <button class="btn btn-save" id="saveBtn">Save Settings</button>
   <button class="btn btn-cancel" id="cancelBtn">Cancel</button>
 
@@ -166,6 +177,14 @@
       document.getElementById('modeMed').checked = true;
     } else {
       document.getElementById('modeLow').checked = true;
+    }
+
+    // Set dev mode toggle
+    var currentDev = getParam('dev') || '0';
+    if (currentDev === '1') {
+      document.getElementById('devOn').checked = true;
+    } else {
+      document.getElementById('devOff').checked = true;
     }
 
     // CloudPebble appends return_to param; real phone uses pebblejs://close
@@ -197,10 +216,12 @@
     // Save button
     document.getElementById('saveBtn').addEventListener('click', function () {
       var selectedMode = document.querySelector('input[name="displayMode"]:checked');
+      var selectedDev = document.querySelector('input[name="devMode"]:checked');
       var result = {
         zipCode: zipField.value.trim() || '08226',
         stationId: stationField.value.trim(),
-        displayMode: selectedMode ? selectedMode.value : '1'
+        displayMode: selectedMode ? selectedMode.value : '1',
+        devMode: selectedDev ? selectedDev.value : '0'
       };
 
       console.log('Saving config:', JSON.stringify(result));

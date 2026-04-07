@@ -13,7 +13,8 @@
 var settings = {
   zipCode: '08226',  // Ocean City, NJ (default - has nearby NOAA tide station)
   stationId: '',      // Optional NOAA station override
-  displayMode: 1      // 0=low, 1=med, 2=high
+  displayMode: 1,     // 0=low, 1=med, 2=high
+  devMode: 0          // 0=off, 1=on (enables preset cycling via tap)
 };
 
 // ============================================================================
@@ -448,6 +449,7 @@ function loadSettings() {
       if (parsed.zipCode) settings.zipCode = parsed.zipCode;
       if (parsed.stationId) settings.stationId = parsed.stationId;
       if (parsed.displayMode !== undefined) settings.displayMode = parsed.displayMode;
+      if (parsed.devMode !== undefined) settings.devMode = parsed.devMode;
     }
   } catch (e) {
     console.log('Error loading settings: ' + e);
@@ -463,7 +465,8 @@ Pebble.addEventListener('showConfiguration', function () {
   var url = 'https://hobbykitjr.github.io/Pebble-tides/config/index.html' +
     '?zip=' + encodeURIComponent(settings.zipCode) +
     '&station=' + encodeURIComponent(settings.stationId || '') +
-    '&mode=' + settings.displayMode;
+    '&mode=' + settings.displayMode +
+    '&dev=' + settings.devMode;
   console.log('Opening config: ' + url);
   Pebble.openURL(url);
 });
@@ -481,13 +484,14 @@ Pebble.addEventListener('webviewclosed', function (e) {
       if (config.zipCode) settings.zipCode = config.zipCode;
       if (config.stationId !== undefined) settings.stationId = config.stationId;
       if (config.displayMode !== undefined) settings.displayMode = parseInt(config.displayMode);
+      if (config.devMode !== undefined) settings.devMode = parseInt(config.devMode);
       saveSettings();
-      console.log('Settings updated: zip=' + settings.zipCode + ' mode=' + settings.displayMode);
+      console.log('Settings updated: zip=' + settings.zipCode + ' mode=' + settings.displayMode + ' dev=' + settings.devMode);
 
-      // Send display mode immediately, then fetch fresh data
-      Pebble.sendAppMessage({'DISPLAY_MODE': settings.displayMode},
-        function() { console.log('Display mode sent'); },
-        function() { console.log('Display mode send failed'); }
+      // Send display mode + dev mode immediately, then fetch fresh data
+      Pebble.sendAppMessage({'DISPLAY_MODE': settings.displayMode, 'DEV_MODE': settings.devMode},
+        function() { console.log('Settings sent'); },
+        function() { console.log('Settings send failed'); }
       );
       fetchAllData();
     } catch (err) {

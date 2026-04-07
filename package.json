@@ -31,7 +31,8 @@
       "WEATHER_CODE": 15,
       "PREV_TIDE_HOUR": 16,
       "PREV_TIDE_MIN": 17,
-      "TOWN_NAME": 18
+      "TOWN_NAME": 18,
+      "DEV_MODE": 19
     },
     "watchapp": {
       "watchface": true

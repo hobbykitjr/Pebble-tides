@@ -51,6 +51,7 @@
 #define P_WEATHER      13
 #define P_PREV_TIDE_H  14
 #define P_PREV_TIDE_M  15
+#define P_DEV_MODE     16
 
 // Weather
 #define WX_CLEAR 0
@@ -62,7 +63,6 @@
 #define WX_SNOW 6
 #define WX_WIND 7
 
-#define DEV_MODE 1
 #define NUM_PRESETS 6
 
 // ============================================================================
@@ -85,7 +85,7 @@
   #define C_TEXT      GColorWhite
   #define C_SHAD      GColorBlack
   #define C_INFO      GColorCeleste
-  #define C_SHELL     GColorFromHEX(0xE8D0B0)
+
   #define C_SIGN_P    GColorFromHEX(0x8B6914)
   #define C_SIGN_B    GColorFromHEX(0xD4B070)
   #define C_PLANE     GColorWhite
@@ -106,7 +106,7 @@
   #define C_TEXT      GColorBlack
   #define C_SHAD      GColorWhite
   #define C_INFO      GColorBlack
-  #define C_SHELL     GColorLightGray
+
   #define C_SIGN_P    GColorDarkGray
   #define C_SIGN_B    GColorLightGray
   #define C_PLANE     GColorBlack
@@ -144,15 +144,17 @@ static Data s_d={.sr_h=6,.sr_m=15,.ss_h=19,.ss_m=45,.tide_pct=50,.tide_st=1,
 
 static char s_tbuf[8],s_dbuf[16],s_t1[40],s_t2[40],s_sr[8],s_ss[8],s_tmp[8];
 static int s_det=DETAIL_MED, s_hr=12, s_mn=0;
+static bool s_dev=false;
 
 static bool s_plane=false;
 static int s_px=-50;
 static bool s_refreshing=false;
+static int s_saved_det=-1;        // Temp detail boost: saved level (-1 = not boosted)
+static AppTimer *s_det_timer=NULL;
 
 // ============================================================================
-// DEV MODE
+// DEV MODE (runtime-toggled via config)
 // ============================================================================
-#if DEV_MODE
 static int s_pre=-1;
 static const char *s_pnames[]={"Dawn","MornHi","Noon","Dusk","NightF","NightR"};
 typedef struct {
@@ -181,7 +183,6 @@ static void apply_pre(int i) {
   else { int h=p->h%12; if(!h)h=12; snprintf(s_tbuf,sizeof(s_tbuf),"%d:%02d",h,p->m); }
   snprintf(s_dbuf,sizeof(s_dbuf),"DEV:%s",s_pnames[i]);
 }
-#endif
 
 // ============================================================================
 // UTILITY
@@ -206,9 +207,7 @@ static int night_prog(void) {
   return nl>0?(el*100)/nl:50;
 }
 static int moon_phase(void) {
-  #if DEV_MODE
-  if(s_pre>=0){int ph[]={1,7,15,22,25,29}; return ph[s_pre];}
-  #endif
+  if(s_dev&&s_pre>=0){int ph[]={1,7,15,22,25,29}; return ph[s_pre];}
   time_t t=time(NULL); struct tm *tm=localtime(&t); if(!tm) return 15;
   int y=tm->tm_year+1900,m=tm->tm_mon+1,d=tm->tm_mday;
   long days=(y-2000)*365+(y-2000)/4-(y-2000)/100+(y-2000)/400;
@@ -826,12 +825,8 @@ static void anim_cb(void *data){
   s_anim_ms+=WAVE_ANIM_INTERVAL;
   if(s_plane){s_px+=PLANE_SPEED; if(s_px>300){s_plane=false;s_refreshing=false;}}
   if(s_canvas) layer_mark_dirty(s_canvas);
-  #if DEV_MODE
-  bool stop=false;
-  #else
-  bool stop=(s_anim_ms>=WAVE_ANIM_DURATION && !s_plane);
-  #endif
-  if(stop||(s_bat<=LOW_BATTERY_THRESHOLD&&!s_plane)){
+  bool stop=(s_dev&&s_pre>=0)?false:(s_anim_ms>=WAVE_ANIM_DURATION && !s_plane);
+  if(stop||(s_bat<=LOW_BATTERY_THRESHOLD&&!s_plane&&!(s_dev&&s_pre>=0))){
     s_anim=false; return;
   }
   s_timer=app_timer_register(WAVE_ANIM_INTERVAL,anim_cb,NULL);
@@ -846,17 +841,52 @@ static void start_anim(void){
 }
 
 // ============================================================================
+// DETAIL BOOST (tap to peek at high detail)
+// ============================================================================
+static void det_revert_cb(void *data){
+  s_det_timer=NULL;
+  if(s_saved_det>=0){s_det=s_saved_det; s_saved_det=-1;}
+  if(s_canvas) layer_mark_dirty(s_canvas);
+}
+static void det_boost(void){
+  if(s_saved_det<0) s_saved_det=s_det;  // Save only if not already boosted
+  s_det=DETAIL_HIGH;
+  if(s_det_timer) app_timer_cancel(s_det_timer);
+  s_det_timer=app_timer_register(5000,det_revert_cb,NULL);
+  if(s_canvas) layer_mark_dirty(s_canvas);
+}
+
+// ============================================================================
+// FORCE REFRESH (select long-press)
+// ============================================================================
+static void force_refresh(void){
+  if(!s_plane){
+    s_plane=true;s_px=-50;s_refreshing=true;
+    DictionaryIterator *it;
+    if(app_message_outbox_begin(&it)==APP_MSG_OK){
+      dict_write_uint8(it,MESSAGE_KEY_REQUEST_DATA,1);
+      app_message_outbox_send();
+    }
+    start_anim();
+  }
+}
+static void select_long_handler(ClickRecognizerRef ref, void *ctx){
+  force_refresh();
+}
+static void click_config(void *ctx){
+  window_long_click_subscribe(BUTTON_ID_SELECT,500,select_long_handler,NULL);
+}
+
+// ============================================================================
 // EVENTS
 // ============================================================================
 static void tick_cb(struct tm *t, TimeUnits u){
-  #if DEV_MODE
-  if(s_pre>=0){
+  if(s_dev&&s_pre>=0){
     // Recovery: if animation died, restart it
     if(!s_anim || !s_timer) start_anim();
     else if(s_canvas) layer_mark_dirty(s_canvas);
     return;
   }
-  #endif
   upd_time();
   if(t->tm_min%5==0) start_anim();
   else if(s_canvas) layer_mark_dirty(s_canvas);
@@ -870,32 +900,22 @@ static void tick_cb(struct tm *t, TimeUnits u){
 }
 static void bat_cb(BatteryChargeState s){
   s_bat=s.charge_percent;
-  // Never mark dirty here — animation loop or minute tick handles it.
-  // This prevents battery slider from disrupting the animation timer.
 }
 static void bt_cb(bool c){
   s_bt=c; if(!c) vibes_short_pulse();
   if(s_canvas) layer_mark_dirty(s_canvas);
 }
 static void tap_cb(AccelAxisType a, int32_t d){
-  #if DEV_MODE
-  if(s_pre>=0||!s_d.valid){
+  if(s_dev&&(s_pre>=0||!s_d.valid)){
     s_pre++; if(s_pre>=NUM_PRESETS) s_pre=0;
     apply_pre(s_pre);
     s_plane=true; s_px=-50; s_refreshing=false;
     APP_LOG(APP_LOG_LEVEL_INFO,"DEV %d",s_pre);
+    start_anim();
+  } else {
+    det_boost();
+    start_anim();
   }
-  #else
-  if(!s_plane){
-    s_plane=true;s_px=-50;s_refreshing=true;
-    DictionaryIterator *it;
-    if(app_message_outbox_begin(&it)==APP_MSG_OK){
-      dict_write_uint8(it,MESSAGE_KEY_REQUEST_DATA,1);
-      app_message_outbox_send();
-    }
-  }
-  #endif
-  start_anim();
 }
 
 // ============================================================================
@@ -903,8 +923,15 @@ static void tap_cb(AccelAxisType a, int32_t d){
 // ============================================================================
 static void inbox_cb(DictionaryIterator *it, void *c){
   Tuple *t;
-  #if DEV_MODE
-  if(s_pre>=0){
+  // Check for dev mode toggle
+  t=dict_find(it,MESSAGE_KEY_DEV_MODE);
+  if(t){
+    s_dev=(bool)t->value->int32;
+    persist_write_bool(P_DEV_MODE,s_dev);
+    APP_LOG(APP_LOG_LEVEL_INFO,"Dev mode %s",s_dev?"ON":"OFF");
+    if(!s_dev){s_pre=-1; upd_time();}  // Exit dev presets, show real time
+  }
+  if(s_dev&&s_pre>=0){
     t=dict_find(it,MESSAGE_KEY_DISPLAY_MODE);
     if(t){
       s_det=(int)t->value->int32;
@@ -914,7 +941,6 @@ static void inbox_cb(DictionaryIterator *it, void *c){
     }
     return;
   }
-  #endif
   t=dict_find(it,MESSAGE_KEY_TIDE_HEIGHT);   if(t) s_d.tide_pct=(int)t->value->int32;
   t=dict_find(it,MESSAGE_KEY_TIDE_STATE);    if(t) s_d.tide_st=(int)t->value->int32;
   t=dict_find(it,MESSAGE_KEY_SUNRISE_HOUR);  if(t) s_d.sr_h=(int)t->value->int32;
@@ -983,6 +1009,7 @@ static void load_data(void){
   if(persist_exists(P_TEMPERATURE)) s_d.temp=persist_read_int(P_TEMPERATURE);
   if(persist_exists(P_WEATHER)) s_d.wx=persist_read_int(P_WEATHER);
   if(persist_exists(P_DETAIL)) s_det=persist_read_int(P_DETAIL);
+  if(persist_exists(P_DEV_MODE)) s_dev=persist_read_bool(P_DEV_MODE);
 }
 
 // ============================================================================
@@ -998,14 +1025,13 @@ static void win_load(Window *w){
   s_bat=battery_state_service_peek().charge_percent;
   s_bt=connection_service_peek_pebble_app_connection();
   upd_time();
-  #if DEV_MODE
-  if(!s_d.valid){s_pre=0;apply_pre(0);APP_LOG(APP_LOG_LEVEL_INFO,"DEV:0");}
-  // Don't override s_det — use persisted or default value
-  #endif
+  if(s_dev&&!s_d.valid){s_pre=0;apply_pre(0);APP_LOG(APP_LOG_LEVEL_INFO,"DEV:0");}
+  window_set_click_config_provider(w,click_config);
   start_anim();
 }
 static void win_unload(Window *w){
   if(s_timer){app_timer_cancel(s_timer);s_timer=NULL;}
+  if(s_det_timer){app_timer_cancel(s_det_timer);s_det_timer=NULL;}
   if(s_canvas){layer_destroy(s_canvas);s_canvas=NULL;}
 }
 
