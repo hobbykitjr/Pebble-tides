@@ -642,8 +642,8 @@ static void draw_bt(GContext *ctx, GRect b) {
 static void draw_uv_flag(GContext *ctx, GRect b) {
   if(s_d.uv<=0 && is_night()) return;  // Hide at night with no UV
 
-  int pole_bot=b.size.h-42;
-  int pole_top=pole_bot-16;
+  int pole_bot=b.size.h-38;
+  int pole_top=pole_bot-22;
   int cx=s_bt?195:168;  // Shift left when BT sign is showing
 
   // Pole
@@ -652,9 +652,9 @@ static void draw_uv_flag(GContext *ctx, GRect b) {
   #else
   graphics_context_set_fill_color(ctx,GColorDarkGray);
   #endif
-  graphics_fill_rect(ctx,GRect(cx,pole_top,2,pole_bot-pole_top),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(cx,pole_top,3,pole_bot-pole_top),0,GCornerNone);
 
-  // Flag (10x7 rectangle hanging from pole top)
+  // Flag (16x12 rectangle hanging from pole top)
   GColor fc;
   #ifdef PBL_COLOR
   if(s_d.uv>=11)      fc=GColorPurple;
@@ -666,32 +666,31 @@ static void draw_uv_flag(GContext *ctx, GRect b) {
   fc=(s_d.uv>=6)?GColorWhite:GColorLightGray;
   #endif
   graphics_context_set_fill_color(ctx,fc);
-  graphics_fill_rect(ctx,GRect(cx+2,pole_top,10,7),0,GCornerNone);
+  graphics_fill_rect(ctx,GRect(cx+3,pole_top,16,12),0,GCornerNone);
 
   // Flag border for visibility
   graphics_context_set_stroke_color(ctx,GColorBlack);
-  graphics_draw_rect(ctx,GRect(cx+2,pole_top,10,7));
+  graphics_draw_rect(ctx,GRect(cx+3,pole_top,16,12));
 
   // UV number on flag (always shown when daytime)
   if(!is_night() && s_d.uv>0) {
     char uv[3];
     snprintf(uv,sizeof(uv),"%d",s_d.uv);
-    GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
-    // Dark text on bright flags, white text on dark flags
+    GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD);
     #ifdef PBL_COLOR
     graphics_context_set_text_color(ctx,(s_d.uv>=8)?GColorWhite:GColorBlack);
     #else
     graphics_context_set_text_color(ctx,GColorBlack);
     #endif
-    graphics_draw_text(ctx,uv,f,GRect(cx+2,pole_top-3,10,14),
+    graphics_draw_text(ctx,uv,f,GRect(cx+3,pole_top-4,16,18),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 
-  // HIGH detail: "UV" label below pole
-  if(s_det==DETAIL_HIGH) {
+  // "UV" label below pole (always visible on MED+)
+  if(s_det>=DETAIL_MED) {
     GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
     graphics_context_set_text_color(ctx,C_INFO);
-    graphics_draw_text(ctx,"UV",f,GRect(cx-4,pole_bot+1,20,16),
+    graphics_draw_text(ctx,"UV",f,GRect(cx-2,pole_bot+1,24,16),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 }
