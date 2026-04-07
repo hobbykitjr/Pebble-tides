@@ -166,7 +166,7 @@ typedef struct {
 static const Pre s_pres[NUM_PRESETS]={
   { 6,15, 6,0,19,45, 25,1, 10,30,16,45, 4,0,   58,WX_FOG,  1},
   { 9,30, 6,0,19,45, 95,0,  9,15,15,30, 9,15,  72,WX_CLOUDY,4},
-  {12, 0, 6,0,19,45, 50,0, 18, 0,15,30, 9,30,  85,WX_CLEAR, 9},
+  {12, 0, 6,0,19,45, 50,0, 18, 0,15,30, 9,30,  85,WX_CLEAR,12},
   {19,30, 6,0,19,45, 10,1, 22, 0,19,15, 19,15, 68,WX_WIND,  2},
   {22, 0, 6,0,19,45, 60,0,  4,30,22,30, 21,30, 55,WX_RAIN,  0},
   { 2,30, 6,0,19,45, 30,1,  4,30, 0,15, 0,15,  48,WX_SNOW,  0},
@@ -687,7 +687,7 @@ static void draw_uv_flag(GContext *ctx, GRect b) {
     #else
     graphics_context_set_text_color(ctx,GColorBlack);
     #endif
-    graphics_draw_text(ctx,uv,f,GRect(cx+3,pole_top-10,28,28),
+    graphics_draw_text(ctx,uv,f,GRect(cx+3,pole_top-11,28,28),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 
