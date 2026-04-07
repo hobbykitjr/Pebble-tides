@@ -4,7 +4,7 @@ A pixel art beach watchface for the **Pebble Round 2** (gabbro, 260x260) with re
 
 ## Features
 
-- **Pixel art tropical beach scene** - Sky, ocean with layered waves, sandy beach, palm tree
+- **Pixel art tropical beach scene** - Sky, ocean with layered waves, sandy beach
 - **Real tide data** - Water level rises and falls based on NOAA tide predictions
 - **Sunrise/sunset tracking** - Sun moves across a sky arc matching real sun times; sky colors shift at dawn/dusk; stars at night
 - **Wave animation** - Brief animated waves every 5 minutes and on wrist tap (battery-efficient)
