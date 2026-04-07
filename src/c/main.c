@@ -687,7 +687,7 @@ static void draw_uv_flag(GContext *ctx, GRect b) {
     #else
     graphics_context_set_text_color(ctx,GColorBlack);
     #endif
-    graphics_draw_text(ctx,uv,f,GRect(cx+3,pole_top-4,28,28),
+    graphics_draw_text(ctx,uv,f,GRect(cx+3,pole_top-10,28,28),
       GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
   }
 
