@@ -282,7 +282,7 @@ function processTideData(predictions) {
 // ============================================================================
 // Parse "h:mm:ss AM/PM" format from sunrise-sunset.org (formatted=1)
 function parseSunTime(timeStr) {
-  // e.g. "6:23:45 AM" or "7:45:12 PM"
+  // e.g. "6:23:45 AM" or "7:45:12 PM" — NOTE: these are UTC from formatted=1
   var parts = timeStr.trim().split(' ');
   var timeParts = parts[0].split(':');
   var hour = parseInt(timeParts[0]);
@@ -292,7 +292,10 @@ function parseSunTime(timeStr) {
   if (ampm === 'PM' && hour !== 12) hour += 12;
   if (ampm === 'AM' && hour === 12) hour = 0;
 
-  return { hour: hour, min: min };
+  // Convert UTC to local time via Date object
+  var now = new Date();
+  var utc = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), hour, min, 0));
+  return { hour: utc.getHours(), min: utc.getMinutes() };
 }
 
 function fetchSunriseSunset(lat, lng, callback) {

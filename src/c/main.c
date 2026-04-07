@@ -187,6 +187,7 @@ static void apply_pre(int i) {
 // ============================================================================
 // UTILITY
 // ============================================================================
+static int fmt_h(int h){if(clock_is_24h_style())return h; int r=h%12; return r?r:12;}
 static int sun_prog(void) {
   int sr=s_d.sr_h*60+s_d.sr_m, ss=s_d.ss_h*60+s_d.ss_m, now=s_hr*60+s_mn;
   if(now<sr||now>ss) return -1;
@@ -207,7 +208,7 @@ static int night_prog(void) {
   return nl>0?(el*100)/nl:50;
 }
 static int moon_phase(void) {
-  if(s_dev&&s_pre>=0){int ph[]={1,7,15,22,25,29}; return ph[s_pre];}
+  if((s_dev||!s_d.valid)&&s_pre>=0){int ph[]={1,7,15,22,25,29}; return ph[s_pre];}
   time_t t=time(NULL); struct tm *tm=localtime(&t); if(!tm) return 15;
   int y=tm->tm_year+1900,m=tm->tm_mon+1,d=tm->tm_mday;
   long days=(y-2000)*365+(y-2000)/4-(y-2000)/100+(y-2000)/400;
@@ -723,8 +724,8 @@ static void draw_hud(GContext *ctx, GRect b) {
   // -- SUNRISE/SUNSET at 9 and 3 o'clock --
   // MED: times only. HIGH: labels + times.
   if(s_det>=DETAIL_MED) {
-    snprintf(s_sr,sizeof(s_sr),"%d:%02d",s_d.sr_h,s_d.sr_m);
-    snprintf(s_ss,sizeof(s_ss),"%d:%02d",s_d.ss_h,s_d.ss_m);
+    snprintf(s_sr,sizeof(s_sr),"%d:%02d",fmt_h(s_d.sr_h),s_d.sr_m);
+    snprintf(s_ss,sizeof(s_ss),"%d:%02d",fmt_h(s_d.ss_h),s_d.ss_m);
     int mid_y=b.size.h/2;
     if(s_det>=DETAIL_HIGH) {
       // HIGH: labels above times
@@ -755,14 +756,14 @@ static void draw_hud(GContext *ctx, GRect b) {
       if(!since) snprintf(s_t1,sizeof(s_t1),"%s now!",pl);
       else if(since<60) snprintf(s_t1,sizeof(s_t1),"%s %dm ago",pl,since);
       else snprintf(s_t1,sizeof(s_t1),"%s 1hr ago",pl);
-      snprintf(s_t2,sizeof(s_t2),"%s %d:%02d",nl,nh,nm);
+      snprintf(s_t2,sizeof(s_t2),"%s %d:%02d",nl,fmt_h(nh),nm);
     } else if(until<=60){
       if(until<60) snprintf(s_t1,sizeof(s_t1),"%s in %dm",nl,until);
       else snprintf(s_t1,sizeof(s_t1),"%s in 1hr",nl);
-      snprintf(s_t2,sizeof(s_t2),"%s %d:%02d",fl,fh,fm);
+      snprintf(s_t2,sizeof(s_t2),"%s %d:%02d",fl,fmt_h(fh),fm);
     } else {
-      snprintf(s_t1,sizeof(s_t1),"%s %d:%02d",nl,nh,nm);
-      snprintf(s_t2,sizeof(s_t2),"%s %d:%02d",fl,fh,fm);
+      snprintf(s_t1,sizeof(s_t1),"%s %d:%02d",nl,fmt_h(nh),nm);
+      snprintf(s_t2,sizeof(s_t2),"%s %d:%02d",fl,fmt_h(fh),fm);
     }
 
     // Fixed position at bottom of screen
@@ -825,8 +826,9 @@ static void anim_cb(void *data){
   s_anim_ms+=WAVE_ANIM_INTERVAL;
   if(s_plane){s_px+=PLANE_SPEED; if(s_px>300){s_plane=false;s_refreshing=false;}}
   if(s_canvas) layer_mark_dirty(s_canvas);
-  bool stop=(s_dev&&s_pre>=0)?false:(s_anim_ms>=WAVE_ANIM_DURATION && !s_plane);
-  if(stop||(s_bat<=LOW_BATTERY_THRESHOLD&&!s_plane&&!(s_dev&&s_pre>=0))){
+  bool indev=(s_dev||!s_d.valid)&&s_pre>=0;
+  bool stop=indev?false:(s_anim_ms>=WAVE_ANIM_DURATION && !s_plane);
+  if(stop||(s_bat<=LOW_BATTERY_THRESHOLD&&!s_plane&&!indev)){
     s_anim=false; return;
   }
   s_timer=app_timer_register(WAVE_ANIM_INTERVAL,anim_cb,NULL);
@@ -881,7 +883,7 @@ static void click_config(void *ctx){
 // EVENTS
 // ============================================================================
 static void tick_cb(struct tm *t, TimeUnits u){
-  if(s_dev&&s_pre>=0){
+  if((s_dev||!s_d.valid)&&s_pre>=0){
     // Recovery: if animation died, restart it
     if(!s_anim || !s_timer) start_anim();
     else if(s_canvas) layer_mark_dirty(s_canvas);
@@ -906,7 +908,7 @@ static void bt_cb(bool c){
   if(s_canvas) layer_mark_dirty(s_canvas);
 }
 static void tap_cb(AccelAxisType a, int32_t d){
-  if(s_dev&&(s_pre>=0||!s_d.valid)){
+  if(s_dev||!s_d.valid){
     s_pre++; if(s_pre>=NUM_PRESETS) s_pre=0;
     apply_pre(s_pre);
     s_plane=true; s_px=-50; s_refreshing=false;
@@ -932,6 +934,7 @@ static void inbox_cb(DictionaryIterator *it, void *c){
     if(!s_dev){s_pre=-1; upd_time();}  // Exit dev presets, show real time
   }
   if(s_dev&&s_pre>=0){
+    // In explicit dev mode, only process display mode changes
     t=dict_find(it,MESSAGE_KEY_DISPLAY_MODE);
     if(t){
       s_det=(int)t->value->int32;
@@ -941,6 +944,8 @@ static void inbox_cb(DictionaryIterator *it, void *c){
     }
     return;
   }
+  // When auto-dev (no data), exit preset mode so real data takes over
+  if(s_pre>=0){s_pre=-1; upd_time();}
   t=dict_find(it,MESSAGE_KEY_TIDE_HEIGHT);   if(t) s_d.tide_pct=(int)t->value->int32;
   t=dict_find(it,MESSAGE_KEY_TIDE_STATE);    if(t) s_d.tide_st=(int)t->value->int32;
   t=dict_find(it,MESSAGE_KEY_SUNRISE_HOUR);  if(t) s_d.sr_h=(int)t->value->int32;
@@ -1025,7 +1030,7 @@ static void win_load(Window *w){
   s_bat=battery_state_service_peek().charge_percent;
   s_bt=connection_service_peek_pebble_app_connection();
   upd_time();
-  if(s_dev&&!s_d.valid){s_pre=0;apply_pre(0);APP_LOG(APP_LOG_LEVEL_INFO,"DEV:0");}
+  if(!s_d.valid){s_pre=0;apply_pre(0);APP_LOG(APP_LOG_LEVEL_INFO,"DEV:0");}
   window_set_click_config_provider(w,click_config);
   start_anim();
 }
