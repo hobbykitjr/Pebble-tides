@@ -644,7 +644,7 @@ static void draw_uv_flag(GContext *ctx, GRect b) {
 
   int pole_bot=b.size.h-42;
   int pole_top=pole_bot-16;
-  int cx=195;
+  int cx=s_bt?195:168;  // Shift left when BT sign is showing
 
   // Pole
   #ifdef PBL_COLOR
