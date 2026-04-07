@@ -53,6 +53,7 @@
 #define P_PREV_TIDE_M  15
 #define P_DEV_MODE     16
 #define P_LARGE_FONT   17
+#define P_UV_INDEX     18
 
 // Weather
 #define WX_CLEAR 0
@@ -123,7 +124,7 @@ typedef struct {
   int tide_pct,tide_st;
   int nhi_h,nhi_m, nlo_h,nlo_m;
   int pt_h,pt_m;
-  int temp,wx;
+  int temp,wx,uv;
   char town[24];
   bool valid;
 } Data;
@@ -141,7 +142,7 @@ static int s_anim_ms=0;
 static Wave s_waves[NUM_WAVES];
 static Data s_d={.sr_h=6,.sr_m=15,.ss_h=19,.ss_m=45,.tide_pct=50,.tide_st=1,
   .nhi_h=12,.nhi_m=0,.nlo_h=18,.nlo_m=0,.pt_h=6,.pt_m=0,
-  .temp=72,.wx=WX_CLEAR,.town="Ocean City, NJ",.valid=false};
+  .temp=72,.wx=WX_CLEAR,.uv=0,.town="Ocean City, NJ",.valid=false};
 
 static char s_tbuf[8],s_dbuf[16],s_t1[40],s_t2[40],s_sr[8],s_ss[8],s_tmp[8];
 static int s_det=DETAIL_MED, s_hr=12, s_mn=0;
@@ -159,15 +160,15 @@ static AppTimer *s_det_timer=NULL;
 static int s_pre=-1;
 static const char *s_pnames[]={"Dawn","MornHi","Noon","Dusk","NightF","NightR"};
 typedef struct {
-  int h,m,srh,srm,ssh,ssm,tp,ts,nhh,nhm,nlh,nlm,pth,ptm,tmp,wx;
+  int h,m,srh,srm,ssh,ssm,tp,ts,nhh,nhm,nlh,nlm,pth,ptm,tmp,wx,uv;
 } Pre;
 static const Pre s_pres[NUM_PRESETS]={
-  { 6,15, 6,0,19,45, 25,1, 10,30,16,45, 4,0,   58,WX_FOG},
-  { 9,30, 6,0,19,45, 95,0,  9,15,15,30, 9,15,  72,WX_CLOUDY},
-  {12, 0, 6,0,19,45, 50,0, 18, 0,15,30, 9,30,  85,WX_CLEAR},
-  {19,30, 6,0,19,45, 10,1, 22, 0,19,15, 19,15, 68,WX_WIND},
-  {22, 0, 6,0,19,45, 60,0,  4,30,22,30, 21,30, 55,WX_RAIN},
-  { 2,30, 6,0,19,45, 30,1,  4,30, 0,15, 0,15,  48,WX_SNOW},
+  { 6,15, 6,0,19,45, 25,1, 10,30,16,45, 4,0,   58,WX_FOG,  1},
+  { 9,30, 6,0,19,45, 95,0,  9,15,15,30, 9,15,  72,WX_CLOUDY,4},
+  {12, 0, 6,0,19,45, 50,0, 18, 0,15,30, 9,30,  85,WX_CLEAR, 9},
+  {19,30, 6,0,19,45, 10,1, 22, 0,19,15, 19,15, 68,WX_WIND,  2},
+  {22, 0, 6,0,19,45, 60,0,  4,30,22,30, 21,30, 55,WX_RAIN,  0},
+  { 2,30, 6,0,19,45, 30,1,  4,30, 0,15, 0,15,  48,WX_SNOW,  0},
 };
 static void apply_pre(int i) {
   if(i<0||i>=NUM_PRESETS) return;
@@ -177,7 +178,7 @@ static void apply_pre(int i) {
   s_d.tide_pct=p->tp; s_d.tide_st=p->ts;
   s_d.nhi_h=p->nhh; s_d.nhi_m=p->nhm; s_d.nlo_h=p->nlh; s_d.nlo_m=p->nlm;
   s_d.pt_h=p->pth; s_d.pt_m=p->ptm;
-  s_d.temp=p->tmp; s_d.wx=p->wx;
+  s_d.temp=p->tmp; s_d.wx=p->wx; s_d.uv=p->uv;
   snprintf(s_d.town,sizeof(s_d.town),"Ocean City, NJ");
   s_d.valid=true;
   if(clock_is_24h_style()) snprintf(s_tbuf,sizeof(s_tbuf),"%d:%02d",p->h,p->m);
@@ -636,6 +637,66 @@ static void draw_bt(GContext *ctx, GRect b) {
 }
 
 // ============================================================================
+// DRAW: UV FLAG (beach warning flag, color-coded by UV index)
+// ============================================================================
+static void draw_uv_flag(GContext *ctx, GRect b) {
+  if(s_d.uv<=0 && is_night()) return;  // Hide at night with no UV
+
+  int pole_bot=b.size.h-42;
+  int pole_top=pole_bot-16;
+  int cx=195;
+
+  // Pole
+  #ifdef PBL_COLOR
+  graphics_context_set_fill_color(ctx,C_SIGN_P);
+  #else
+  graphics_context_set_fill_color(ctx,GColorDarkGray);
+  #endif
+  graphics_fill_rect(ctx,GRect(cx,pole_top,2,pole_bot-pole_top),0,GCornerNone);
+
+  // Flag (10x7 rectangle hanging from pole top)
+  GColor fc;
+  #ifdef PBL_COLOR
+  if(s_d.uv>=11)      fc=GColorPurple;
+  else if(s_d.uv>=8)  fc=GColorRed;
+  else if(s_d.uv>=6)  fc=GColorOrange;
+  else if(s_d.uv>=3)  fc=GColorChromeYellow;
+  else                 fc=GColorGreen;
+  #else
+  fc=(s_d.uv>=6)?GColorWhite:GColorLightGray;
+  #endif
+  graphics_context_set_fill_color(ctx,fc);
+  graphics_fill_rect(ctx,GRect(cx+2,pole_top,10,7),0,GCornerNone);
+
+  // Flag border for visibility
+  graphics_context_set_stroke_color(ctx,GColorBlack);
+  graphics_draw_rect(ctx,GRect(cx+2,pole_top,10,7));
+
+  // UV number on flag (always shown when daytime)
+  if(!is_night() && s_d.uv>0) {
+    char uv[3];
+    snprintf(uv,sizeof(uv),"%d",s_d.uv);
+    GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
+    // Dark text on bright flags, white text on dark flags
+    #ifdef PBL_COLOR
+    graphics_context_set_text_color(ctx,(s_d.uv>=8)?GColorWhite:GColorBlack);
+    #else
+    graphics_context_set_text_color(ctx,GColorBlack);
+    #endif
+    graphics_draw_text(ctx,uv,f,GRect(cx+2,pole_top-3,10,14),
+      GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
+  }
+
+  // HIGH detail: "UV" label below pole
+  if(s_det==DETAIL_HIGH) {
+    GFont f=fonts_get_system_font(FONT_KEY_GOTHIC_14);
+    graphics_context_set_text_color(ctx,C_INFO);
+    graphics_draw_text(ctx,"UV",f,GRect(cx-4,pole_bot+1,20,16),
+      GTextOverflowModeTrailingEllipsis,GTextAlignmentCenter,NULL);
+  }
+}
+
+// ============================================================================
 // DRAW: AIRPLANE (plane body at same Y as banner)
 // ============================================================================
 static void draw_plane(GContext *ctx, GRect b) {
@@ -805,7 +866,7 @@ static void canvas_proc(Layer *l, GContext *ctx) {
   draw_sky(ctx,b); draw_sun(ctx,b); draw_moon(ctx,b);
   draw_ocean(ctx,b);
   draw_waves(ctx,b);
-  draw_sand(ctx,b); draw_battery(ctx,b); draw_bt(ctx,b);
+  draw_sand(ctx,b); draw_battery(ctx,b); draw_bt(ctx,b); draw_uv_flag(ctx,b);
   draw_plane(ctx,b); draw_hud(ctx,b);
 }
 
@@ -974,6 +1035,7 @@ static void inbox_cb(DictionaryIterator *it, void *c){
   t=dict_find(it,MESSAGE_KEY_DISPLAY_MODE);  if(t) s_det=(int)t->value->int32;
   t=dict_find(it,MESSAGE_KEY_TEMPERATURE);   if(t) s_d.temp=(int)t->value->int32;
   t=dict_find(it,MESSAGE_KEY_WEATHER_CODE);  if(t) s_d.wx=(int)t->value->int32;
+  t=dict_find(it,MESSAGE_KEY_UV_INDEX);      if(t) s_d.uv=(int)t->value->int32;
   t=dict_find(it,MESSAGE_KEY_TOWN_NAME);
   if(t) snprintf(s_d.town,sizeof(s_d.town),"%s",t->value->cstring);
 
@@ -996,6 +1058,7 @@ static void inbox_cb(DictionaryIterator *it, void *c){
   persist_write_int(P_PREV_TIDE_M,s_d.pt_m);
   persist_write_int(P_TEMPERATURE,s_d.temp);
   persist_write_int(P_WEATHER,s_d.wx);
+  persist_write_int(P_UV_INDEX,s_d.uv);
   persist_write_int(P_DETAIL,s_det);
   persist_write_bool(P_DATA_VALID,true);
 }
@@ -1026,6 +1089,7 @@ static void load_data(void){
   }
   if(persist_exists(P_TEMPERATURE)) s_d.temp=persist_read_int(P_TEMPERATURE);
   if(persist_exists(P_WEATHER)) s_d.wx=persist_read_int(P_WEATHER);
+  if(persist_exists(P_UV_INDEX)) s_d.uv=persist_read_int(P_UV_INDEX);
   if(persist_exists(P_DETAIL)) s_det=persist_read_int(P_DETAIL);
   if(persist_exists(P_DEV_MODE)) s_dev=persist_read_bool(P_DEV_MODE);
   if(persist_exists(P_LARGE_FONT)) s_lgfont=persist_read_bool(P_LARGE_FONT);

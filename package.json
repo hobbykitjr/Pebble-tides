@@ -33,7 +33,8 @@
       "PREV_TIDE_MIN": 17,
       "TOWN_NAME": 18,
       "DEV_MODE": 19,
-      "LARGE_FONT": 20
+      "LARGE_FONT": 20,
+      "UV_INDEX": 21
     },
     "watchapp": {
       "watchface": true

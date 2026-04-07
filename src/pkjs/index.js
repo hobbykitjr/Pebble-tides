@@ -301,8 +301,8 @@ function fetchWeatherAndSun(lat, lng, callback) {
   // timezone=auto uses lat/lng to return correct local times
   var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat +
             '&longitude=' + lng +
-            '&current=temperature_2m,weather_code,wind_speed_10m' +
-            '&daily=sunrise,sunset' +
+            '&current=temperature_2m,weather_code,wind_speed_10m,uv_index' +
+            '&daily=sunrise,sunset,uv_index_max' +
             '&temperature_unit=fahrenheit' +
             '&wind_speed_unit=mph' +
             '&timezone=auto' +
@@ -318,18 +318,24 @@ function fetchWeatherAndSun(lat, lng, callback) {
       // Override to "windy" if wind > 20mph and not raining/storming
       if (wind > 20 && wxCode < 4) wxCode = 7;
 
+      // UV index: use current if daytime, daily max as fallback
+      var uvIndex = Math.round(json.current.uv_index || 0);
+      var uvMax = Math.round(json.daily.uv_index_max[0] || 0);
+
       // Parse sunrise/sunset from ISO local time strings (e.g. "2026-04-07T06:31")
       var srParts = json.daily.sunrise[0].split('T')[1].split(':');
       var ssParts = json.daily.sunset[0].split('T')[1].split(':');
 
-      console.log('Weather: ' + temp + 'F, code=' + wxCode + ', wind=' + wind + 'mph');
+      console.log('Weather: ' + temp + 'F, code=' + wxCode + ', wind=' + wind +
+                  'mph, UV=' + uvIndex + ' (max ' + uvMax + ')');
       console.log('Sun (local): rise=' + srParts[0] + ':' + srParts[1] +
                   ' set=' + ssParts[0] + ':' + ssParts[1]);
 
       callback({
         temperature: temp, weatherCode: wxCode,
         sunriseHour: parseInt(srParts[0]), sunriseMin: parseInt(srParts[1]),
-        sunsetHour: parseInt(ssParts[0]), sunsetMin: parseInt(ssParts[1])
+        sunsetHour: parseInt(ssParts[0]), sunsetMin: parseInt(ssParts[1]),
+        uvIndex: uvIndex > 0 ? uvIndex : uvMax
       });
     } catch (e) {
       console.log('Weather/sun parse error: ' + e);
@@ -379,6 +385,7 @@ function fetchAllData() {
         message['SUNRISE_MIN'] = wxSunData.sunriseMin;
         message['SUNSET_HOUR'] = wxSunData.sunsetHour;
         message['SUNSET_MIN'] = wxSunData.sunsetMin;
+        message['UV_INDEX'] = wxSunData.uvIndex;
       }
 
       Pebble.sendAppMessage(message,
