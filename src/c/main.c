@@ -55,6 +55,8 @@
 #define P_LARGE_FONT   17
 #define P_UV_INDEX     18
 #define P_HIDE_BT      19
+#define P_HIDE_UV      20
+#define P_HIDE_BAT     21
 
 // Weather
 #define WX_CLEAR 0
@@ -147,7 +149,7 @@ static Data s_d={.sr_h=6,.sr_m=15,.ss_h=19,.ss_m=45,.tide_pct=50,.tide_st=1,
 
 static char s_tbuf[8],s_dbuf[16],s_t1[40],s_t2[40],s_sr[8],s_ss[8],s_tmp[8];
 static int s_det=DETAIL_MED, s_hr=12, s_mn=0;
-static bool s_dev=false, s_lgfont=false, s_hide_bt=false;
+static bool s_dev=false, s_lgfont=false, s_hide_bt=false, s_hide_uv=false, s_hide_bat=false;
 
 static bool s_plane=false;
 static int s_px=-50;
@@ -545,6 +547,7 @@ static void draw_sand(GContext *ctx, GRect b) {
 // DRAW: BATTERY UMBRELLA
 // ============================================================================
 static void draw_battery(GContext *ctx, GRect b) {
+  if(s_hide_bat) return;
   // Beach umbrella — 5 colored blocks for battery segments
   int cx=58;
   int pole_bot=b.size.h-36;
@@ -642,6 +645,7 @@ static void draw_bt(GContext *ctx, GRect b) {
 // DRAW: UV FLAG (beach warning flag, color-coded by UV index)
 // ============================================================================
 static void draw_uv_flag(GContext *ctx, GRect b) {
+  if(s_hide_uv) return;
   if(s_d.uv<=0 && is_night()) return;  // Hide at night with no UV
 
   int cx=185;
@@ -1012,10 +1016,11 @@ static void inbox_cb(DictionaryIterator *it, void *c){
     APP_LOG(APP_LOG_LEVEL_INFO,"Large font %s",s_lgfont?"ON":"OFF");
   }
   t=dict_find(it,MESSAGE_KEY_HIDE_BT);
-  if(t){
-    s_hide_bt=(bool)t->value->int32;
-    persist_write_bool(P_HIDE_BT,s_hide_bt);
-  }
+  if(t){ s_hide_bt=(bool)t->value->int32; persist_write_bool(P_HIDE_BT,s_hide_bt); }
+  t=dict_find(it,MESSAGE_KEY_HIDE_UV);
+  if(t){ s_hide_uv=(bool)t->value->int32; persist_write_bool(P_HIDE_UV,s_hide_uv); }
+  t=dict_find(it,MESSAGE_KEY_HIDE_BAT);
+  if(t){ s_hide_bat=(bool)t->value->int32; persist_write_bool(P_HIDE_BAT,s_hide_bat); }
   if(s_dev&&s_pre>=0){
     // In explicit dev mode, only process display mode changes
     t=dict_find(it,MESSAGE_KEY_DISPLAY_MODE);
@@ -1103,6 +1108,8 @@ static void load_data(void){
   if(persist_exists(P_DEV_MODE)) s_dev=persist_read_bool(P_DEV_MODE);
   if(persist_exists(P_LARGE_FONT)) s_lgfont=persist_read_bool(P_LARGE_FONT);
   if(persist_exists(P_HIDE_BT)) s_hide_bt=persist_read_bool(P_HIDE_BT);
+  if(persist_exists(P_HIDE_UV)) s_hide_uv=persist_read_bool(P_HIDE_UV);
+  if(persist_exists(P_HIDE_BAT)) s_hide_bat=persist_read_bool(P_HIDE_BAT);
 }
 
 // ============================================================================

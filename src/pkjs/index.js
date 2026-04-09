@@ -16,6 +16,8 @@ var settings = {
   displayMode: 1,     // 0=low, 1=med, 2=high
   largeFont: 0,       // 0=off, 1=on (bigger tide/sun text, 1 row)
   hideBt: 0,          // 0=show, 1=hide BT disconnected sign
+  hideUv: 0,          // 0=show, 1=hide UV flag
+  hideBat: 0,         // 0=show, 1=hide battery umbrella
   useCelsius: 0,      // 0=F, 1=C
   devMode: 0          // 0=off, 1=on (enables preset cycling via tap)
 };
@@ -427,6 +429,8 @@ function loadSettings() {
       if (parsed.displayMode !== undefined) settings.displayMode = parsed.displayMode;
       if (parsed.largeFont !== undefined) settings.largeFont = parsed.largeFont;
       if (parsed.hideBt !== undefined) settings.hideBt = parsed.hideBt;
+      if (parsed.hideUv !== undefined) settings.hideUv = parsed.hideUv;
+      if (parsed.hideBat !== undefined) settings.hideBat = parsed.hideBat;
       if (parsed.useCelsius !== undefined) settings.useCelsius = parsed.useCelsius;
       if (parsed.devMode !== undefined) settings.devMode = parsed.devMode;
     }
@@ -447,6 +451,8 @@ Pebble.addEventListener('showConfiguration', function () {
     '&mode=' + settings.displayMode +
     '&lgfont=' + settings.largeFont +
     '&hidebt=' + settings.hideBt +
+    '&hideuv=' + (settings.hideUv !== undefined ? settings.hideUv : 0) +
+    '&hidebat=' + (settings.hideBat !== undefined ? settings.hideBat : 0) +
     '&unit=' + (settings.useCelsius !== undefined ? settings.useCelsius : 0) +
     '&dev=' + settings.devMode;
   console.log('Opening config: ' + url);
@@ -468,13 +474,15 @@ Pebble.addEventListener('webviewclosed', function (e) {
       if (config.displayMode !== undefined) settings.displayMode = parseInt(config.displayMode);
       if (config.largeFont !== undefined) settings.largeFont = parseInt(config.largeFont);
       if (config.hideBt !== undefined) settings.hideBt = parseInt(config.hideBt);
+      if (config.hideUv !== undefined) settings.hideUv = parseInt(config.hideUv);
+      if (config.hideBat !== undefined) settings.hideBat = parseInt(config.hideBat);
       if (config.useCelsius !== undefined) settings.useCelsius = parseInt(config.useCelsius);
       if (config.devMode !== undefined) settings.devMode = parseInt(config.devMode);
       saveSettings();
       console.log('Settings updated: zip=' + settings.zipCode + ' mode=' + settings.displayMode + ' lgfont=' + settings.largeFont + ' dev=' + settings.devMode);
 
       // Send display mode + dev mode immediately, then fetch fresh data
-      Pebble.sendAppMessage({'DISPLAY_MODE': settings.displayMode, 'LARGE_FONT': settings.largeFont, 'HIDE_BT': settings.hideBt, 'DEV_MODE': settings.devMode},
+      Pebble.sendAppMessage({'DISPLAY_MODE': settings.displayMode, 'LARGE_FONT': settings.largeFont, 'HIDE_BT': settings.hideBt, 'HIDE_UV': settings.hideUv, 'HIDE_BAT': settings.hideBat, 'DEV_MODE': settings.devMode},
         function() { console.log('Settings sent'); },
         function() { console.log('Settings send failed'); }
       );

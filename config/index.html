@@ -156,6 +156,26 @@
   </div>
 
   <div class="card">
+    <h2>UV Flag</h2>
+    <div class="toggle-group">
+      <input type="radio" name="hideUv" id="uvShow" value="0">
+      <label for="uvShow">Show</label>
+      <input type="radio" name="hideUv" id="uvHide" value="1">
+      <label for="uvHide">Hide</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Battery Umbrella</h2>
+    <div class="toggle-group">
+      <input type="radio" name="hideBat" id="batShow" value="0">
+      <label for="batShow">Show</label>
+      <input type="radio" name="hideBat" id="batHide" value="1">
+      <label for="batHide">Hide</label>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>Bluetooth Alert</h2>
     <div class="toggle-group">
       <input type="radio" name="hideBt" id="btShow" value="0">
@@ -215,6 +235,14 @@
     var tempUnit = getParam('unit') || '0';
     document.getElementById(tempUnit === '1' ? 'tempC' : 'tempF').checked = true;
 
+    // Set hide UV toggle
+    var hideUv = getParam('hideuv') || '0';
+    document.getElementById(hideUv === '1' ? 'uvHide' : 'uvShow').checked = true;
+
+    // Set hide battery toggle
+    var hideBat = getParam('hidebat') || '0';
+    document.getElementById(hideBat === '1' ? 'batHide' : 'batShow').checked = true;
+
     // Set hide BT toggle
     var currentBT = getParam('hidebt') || '0';
     if (currentBT === '1') {
@@ -272,11 +300,15 @@
       var selectedLF = document.querySelector('input[name="largeFont"]:checked');
       var selectedBT = document.querySelector('input[name="hideBt"]:checked');
       var selUnit = document.querySelector('input[name="tempUnit"]:checked');
+      var selUv = document.querySelector('input[name="hideUv"]:checked');
+      var selBat = document.querySelector('input[name="hideBat"]:checked');
       var result = {
         zipCode: zipField.value.trim() || '08226',
         stationId: stationField.value.trim(),
         displayMode: selectedMode ? selectedMode.value : '1',
         largeFont: selectedLF ? selectedLF.value : '0',
+        hideUv: selUv ? selUv.value : '0',
+        hideBat: selBat ? selBat.value : '0',
         hideBt: selectedBT ? selectedBT.value : '0',
         useCelsius: selUnit ? selUnit.value : '0',
         devMode: selectedDev ? selectedDev.value : '0'

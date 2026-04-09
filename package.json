@@ -35,7 +35,9 @@
       "DEV_MODE": 19,
       "LARGE_FONT": 20,
       "UV_INDEX": 21,
-      "HIDE_BT": 22
+      "HIDE_BT": 22,
+      "HIDE_UV": 23,
+      "HIDE_BAT": 24
     },
     "watchapp": {
       "watchface": true
