@@ -16,6 +16,7 @@ var settings = {
   displayMode: 1,     // 0=low, 1=med, 2=high
   largeFont: 0,       // 0=off, 1=on (bigger tide/sun text, 1 row)
   hideBt: 0,          // 0=show, 1=hide BT disconnected sign
+  useCelsius: 0,      // 0=F, 1=C
   devMode: 0          // 0=off, 1=on (enables preset cycling via tap)
 };
 
@@ -304,7 +305,7 @@ function fetchWeatherAndSun(lat, lng, callback) {
             '&longitude=' + lng +
             '&current=temperature_2m,weather_code,wind_speed_10m,uv_index' +
             '&daily=sunrise,sunset,uv_index_max' +
-            '&temperature_unit=fahrenheit' +
+            '&temperature_unit=' + (settings.useCelsius ? 'celsius' : 'fahrenheit') +
             '&wind_speed_unit=mph' +
             '&timezone=auto' +
             '&forecast_days=1';
@@ -426,6 +427,7 @@ function loadSettings() {
       if (parsed.displayMode !== undefined) settings.displayMode = parsed.displayMode;
       if (parsed.largeFont !== undefined) settings.largeFont = parsed.largeFont;
       if (parsed.hideBt !== undefined) settings.hideBt = parsed.hideBt;
+      if (parsed.useCelsius !== undefined) settings.useCelsius = parsed.useCelsius;
       if (parsed.devMode !== undefined) settings.devMode = parsed.devMode;
     }
   } catch (e) {
@@ -445,6 +447,7 @@ Pebble.addEventListener('showConfiguration', function () {
     '&mode=' + settings.displayMode +
     '&lgfont=' + settings.largeFont +
     '&hidebt=' + settings.hideBt +
+    '&unit=' + (settings.useCelsius !== undefined ? settings.useCelsius : 0) +
     '&dev=' + settings.devMode;
   console.log('Opening config: ' + url);
   Pebble.openURL(url);
@@ -465,6 +468,7 @@ Pebble.addEventListener('webviewclosed', function (e) {
       if (config.displayMode !== undefined) settings.displayMode = parseInt(config.displayMode);
       if (config.largeFont !== undefined) settings.largeFont = parseInt(config.largeFont);
       if (config.hideBt !== undefined) settings.hideBt = parseInt(config.hideBt);
+      if (config.useCelsius !== undefined) settings.useCelsius = parseInt(config.useCelsius);
       if (config.devMode !== undefined) settings.devMode = parseInt(config.devMode);
       saveSettings();
       console.log('Settings updated: zip=' + settings.zipCode + ' mode=' + settings.displayMode + ' lgfont=' + settings.largeFont + ' dev=' + settings.devMode);

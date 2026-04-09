@@ -146,6 +146,16 @@
   </div>
 
   <div class="card">
+    <h2>Temperature</h2>
+    <div class="toggle-group">
+      <input type="radio" name="tempUnit" id="tempF" value="0">
+      <label for="tempF">&deg;F</label>
+      <input type="radio" name="tempUnit" id="tempC" value="1">
+      <label for="tempC">&deg;C</label>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>Bluetooth Alert</h2>
     <div class="toggle-group">
       <input type="radio" name="hideBt" id="btShow" value="0">
@@ -200,6 +210,10 @@
     } else {
       document.getElementById('modeLow').checked = true;
     }
+
+    // Set temp unit toggle
+    var tempUnit = getParam('unit') || '0';
+    document.getElementById(tempUnit === '1' ? 'tempC' : 'tempF').checked = true;
 
     // Set hide BT toggle
     var currentBT = getParam('hidebt') || '0';
@@ -257,12 +271,14 @@
       var selectedDev = document.querySelector('input[name="devMode"]:checked');
       var selectedLF = document.querySelector('input[name="largeFont"]:checked');
       var selectedBT = document.querySelector('input[name="hideBt"]:checked');
+      var selUnit = document.querySelector('input[name="tempUnit"]:checked');
       var result = {
         zipCode: zipField.value.trim() || '08226',
         stationId: stationField.value.trim(),
         displayMode: selectedMode ? selectedMode.value : '1',
         largeFont: selectedLF ? selectedLF.value : '0',
         hideBt: selectedBT ? selectedBT.value : '0',
+        useCelsius: selUnit ? selUnit.value : '0',
         devMode: selectedDev ? selectedDev.value : '0'
       };
 
